@@ -3,168 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>居家血液透析(HHD)處方與 Kt/V 決策評估系統</title>
+    <title>居家血液透析(HHD)處方與 stdKt/V 決策評估系統</title>
     <style>
         :root {
-            --primary: #2563eb;
+            --primary: #0f766e;
+            --secondary: #0d9488;
             --success: #16a34a;
-            --warning: #ca8a04;
+            --warning: #d97706;
             --danger: #dc2626;
-            --bg: #f8fafc;
+            --bg: #f0fdfa;
             --card-bg: #ffffff;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background-color: var(--bg);
-            color: #333;
+            color: #334155;
             line-height: 1.6;
             padding: 20px;
             margin: 0;
         }
         .container {
-            max-width: 900px;
+            max-width: 950px;
             margin: 0 auto;
         }
         h1 {
             text-align: center;
             color: var(--primary);
-            border-bottom: 2px solid var(--primary);
-            padding-bottom: 10px;
+            border-bottom: 3px solid var(--secondary);
+            padding-bottom: 12px;
+            margin-bottom: 30px;
         }
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 24px;
         }
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
         }
         .card {
             background: var(--card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        }
+        h3 {
+            margin-top: 0;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 16px;
         }
         label {
             display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-weight: 600;
+            margin-bottom: 6px;
             color: #475569;
         }
-        input[type="number"], select {
+        label small {
+            color: #64748b;
+            font-weight: normal;
+        }
+        input[type="number"] {
             width: 100%;
-            padding: 10px;
+            padding: 10px 12px;
             border: 1px solid #cbd5e1;
-            border-radius: 4px;
+            border-radius: 6px;
             box-sizing: border-box;
             font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        input[type="number"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
         }
         button {
             background-color: var(--primary);
             color: white;
             border: none;
-            padding: 12px 20px;
+            padding: 14px 20px;
             font-size: 16px;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             width: 100%;
             font-weight: bold;
+            transition: background-color 0.2s;
+            margin-top: 10px;
         }
-        button:hover { background-color: #1d4ed8; }
+        button:hover { background-color: #115e59; }
         .result-section {
             display: none;
-            border-left: 5px solid var(--success);
+            border-top: 5px solid var(--secondary);
         }
         .alert {
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 15px;
-            font-weight: bold;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
         }
-        .alert-success { background-color: #dcfce7; color: #166534; }
-        .alert-warning { background-color: #fef08a; color: #854d0e; }
-        .alert-danger { background-color: #fee2e2; color: #991b1b; }
+        .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .alert-warning { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
         .data-row {
             display: flex;
             justify-content: space-between;
-            border-bottom: 1px solid #eee;
-            padding: 8px 0;
+            align-items: center;
+            border-bottom: 1px dashed #e2e8f0;
+            padding: 12px 0;
         }
-        .highlight { color: var(--primary); font-weight: bold; font-size: 1.1em; }
+        .data-row:last-child { border-bottom: none; }
+        .highlight { color: var(--primary); font-weight: bold; font-size: 1.15em; }
+        .badge {
+            font-size: 0.85em;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: #475569;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>居家血液透析 (HHD) 決策輔助與 Kt/V 試算</h1>
+    <h1>居家血液透析 (HHD) 處方決策與 stdKt/V 試算模型</h1>
     
     <div class="grid">
-        <!-- 輸入區 -->
+        <!-- 參數輸入區 -->
         <div class="card">
-            <h3>📝 病患臨床參數</h3>
+            <h3>📝 臨床生理參數與目標</h3>
             
             <div class="form-group">
-                <label>現在體重 (Current Weight, kg)</label>
-                <input type="number" id="currentWt" value="68" step="0.1">
+                <label>現在體重 (Current Weight) <small>kg</small></label>
+                <input type="number" id="currentWt" value="70.5" step="0.1">
             </div>
             <div class="form-group">
-                <label>乾體重 (Dry Weight, kg) <small>目標體重</small></label>
-                <input type="number" id="dryWt" value="65" step="0.1">
+                <label>乾體重 (Dry Weight) <small>kg</small></label>
+                <input type="number" id="dryWt" value="68.0" step="0.1">
             </div>
             <div class="form-group">
-                <label>目前肌酸酐 (Serum Cr, mg/dL)</label>
-                <input type="number" id="cr" value="9.5" step="0.1">
+                <label>目前肌酸酐 (Serum Cr) <small>mg/dL</small></label>
+                <input type="number" id="cr" value="11.2" step="0.1">
             </div>
             <div class="form-group">
-                <label>血磷 (Phosphate, mg/dL)</label>
-                <input type="number" id="phos" value="6.5" step="0.1">
+                <label>血磷 (Phosphate) <small>mg/dL</small></label>
+                <input type="number" id="phos" value="6.8" step="0.1">
             </div>
             <div class="form-group">
-                <label>殘餘尿量 (Residual Urine, mL/day)</label>
-                <input type="number" id="urine" value="200" step="100">
+                <label>殘餘尿量 (Residual Urine) <small>mL/day</small></label>
+                <input type="number" id="urine" value="150" step="50">
             </div>
-            <button onclick="calculatePrescription()">生成透析處方與評估</button>
+            <button onclick="calculatePrescription()">執行處方推算與動力學分析</button>
         </div>
 
-        <!-- 結果區 -->
+        <!-- 決策結果區 -->
         <div class="card result-section" id="resultCard">
-            <h3>📊 系統推薦處方與動力學 (Kt/V)</h3>
+            <h3>📊 處方建議與清除率指標</h3>
             
             <div id="alertBox" class="alert"></div>
 
             <div class="data-row">
-                <span>推薦模式:</span>
+                <span>系統推薦模式:</span>
                 <span class="highlight" id="resMode"></span>
             </div>
             <div class="data-row">
-                <span>目標脫水量 (UF):</span>
+                <span>預估單次脫水量 (UF):</span>
                 <span class="highlight"><span id="resUf"></span> L</span>
             </div>
             <div class="data-row">
-                <span>處方頻率與時間:</span>
-                <span id="resFreqTime"></span>
+                <span>建議頻率與時數:</span>
+                <span id="resFreqTime" style="font-weight: 600;"></span>
             </div>
             <div class="data-row">
-                <span>血流速 (Qb) / 透析液流速 (Qd):</span>
+                <span>流速設定 (Qb / Qd):</span>
                 <span id="resFlows"></span>
             </div>
             
-            <h4 style="margin-top: 20px; color: #475569; border-bottom: 1px solid #ccc;">🫀 安全與效能指標</h4>
+            <h4 style="margin-top: 24px; color: #334155; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">🫀 安全與 Kt/V 動力學</h4>
+            
             <div class="data-row">
                 <span>超濾率 (UFR):</span>
-                <span id="resUfr" style="font-weight: bold;"></span>
+                <div>
+                    <span id="resUfr" style="font-weight: bold; font-size: 1.1em;"></span>
+                    <span id="resUfrBadge" class="badge"></span>
+                </div>
             </div>
             <div class="data-row">
-                <span>單次 Kt/V 估算:</span>
-                <span class="highlight" id="resKtV"></span>
+                <span>單次 spKt/V 估算:</span>
+                <span id="resSpKtV"></span>
             </div>
             <div class="data-row">
                 <span>每週總 Kt/V:</span>
-                <span class="highlight" id="resWeeklyKtV"></span>
+                <span id="resWeeklyKtV"></span>
+            </div>
+            <div class="data-row" style="background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 8px;">
+                <span style="font-weight: 600; color: var(--primary);">預期 stdKt/V (標準化):</span>
+                <span class="highlight" id="resStdKtV" style="font-size: 1.3em;"></span>
             </div>
         </div>
     </div>
@@ -172,73 +209,81 @@
 
 <script>
     function calculatePrescription() {
-        // 取得輸入值
         const currentWt = parseFloat(document.getElementById('currentWt').value);
         const dryWt = parseFloat(document.getElementById('dryWt').value);
         const cr = parseFloat(document.getElementById('cr').value);
         const phos = parseFloat(document.getElementById('phos').value);
         const urine = parseFloat(document.getElementById('urine').value);
 
-        // 防呆
         if (currentWt <= dryWt) {
-            alert("現在體重必須大於乾體重，請確認輸入數值！");
+            alert("錯誤：現在體重必須大於乾體重，以計算有效脫水量。");
             return;
         }
 
-        // 基本計算
+        // 1. 脫水體積計算
         const ufVolume_L = currentWt - dryWt;
         const ufVolume_mL = ufVolume_L * 1000;
         
-        // 估算體積 (V) - 使用 Watson formula 簡化版 (佔乾體重 55%)
-        const volume_V_mL = dryWt * 0.55 * 1000;
+        // 2. 估算尿素分佈體積 (V) - Watson簡化模型 (約乾體重 55%)
+        const volume_V_L = dryWt * 0.55;
+        const volume_V_mL = volume_V_L * 1000;
 
-        let mode, freq, hours, qb, qd, estK;
+        let mode, freq, hours, qb, qd, estK_mL_min;
 
-        // 核心決策邏輯：根據磷、尿量與預期脫水決定模式
-        if (phos > 6.0 || ufVolume_L > 3.0 || (cr > 10 && urine < 100)) {
-            // 磷高、需水量大、或完全無尿且毒素高 -> 推薦夜間長時透析 (NHHD)
+        // 3. 核心決策邏輯：整合 Cr、尿量與血磷
+        // 高毒素(Cr>10)且少尿、或血磷難以控制、或需大量脫水(>3L) -> 優先推薦 NHHD
+        if (phos >= 6.0 || ufVolume_L >= 3.0 || (cr >= 10.0 && urine <= 200)) {
             mode = "夜間長時透析 (Nocturnal HHD)";
-            freq = 4; // 每週 4 次
-            hours = 7; // 每次 7 小時
-            qb = 250; // 低血流速策安全
+            freq = 4;        // 每週 4 晚 (隔日)
+            hours = 7.5;     // 每次 7.5 小時
+            qb = 220;        // 降低血流速保護瘻管與心臟
             qd = 300; 
-            estK = 160; // 在低血流速下的 clearance 估算
+            estK_mL_min = 155; 
         } else {
-            // 短時間每日透析 (SDHHD)
             mode = "短時間每日透析 (Short Daily HHD)";
-            freq = 5; // 每週 5 次
-            hours = 2.5; // 每次 2.5 小時
-            qb = 350; 
-            qd = 400; // 或 NxStage 容積模式
-            estK = 220; // 在較高血流速下的 clearance 估算
+            freq = 5;        // 每週 5 次
+            hours = 2.5;     // 每次 2.5 小時
+            qb = 350;        // 較高血流速
+            qd = 400; 
+            estK_mL_min = 230; 
         }
 
-        // 計算 UFR (mL/kg/hr) 基準為乾體重
+        // 4. 超濾率 (UFR) 計算 (mL/kg/hr)
         const ufr = ufVolume_mL / (dryWt * hours);
-        let ufrStatus = "";
-        let alertClass = "";
-        let alertMsg = "";
+        let ufrBadge = "", alertClass = "", alertMsg = "";
 
         if (ufr <= 10) {
-            ufrStatus = "🟢 安全 (≤ 10 mL/kg/hr)";
+            ufrBadge = "🟢 最佳安全區";
             alertClass = "alert-success";
-            alertMsg = "心血管負荷極低，透析處方安全。";
+            alertMsg = "心血管負荷極低，目前的脫水速率與透析時間設定非常安全。";
         } else if (ufr <= 13) {
-            ufrStatus = "🟡 臨界警示 (10-13 mL/kg/hr)";
+            ufrBadge = "🟡 臨界監測區";
             alertClass = "alert-warning";
-            alertMsg = "脫水速率尚可接受，但需監測血壓變化。";
+            alertMsg = "UFR 介於 10-13 mL/kg/hr，尚在可接受範圍，但請密切注意血壓波動。";
         } else {
-            ufrStatus = "🔴 危險 (> 13 mL/kg/hr)";
+            ufrBadge = "🔴 危險區域";
             alertClass = "alert-danger";
-            alertMsg = "⚠️ 警告：脫水速率過快！有誘發心肌頓抑(Stunning)風險，建議增加透析時間或頻率。";
+            alertMsg = `⚠️ 警告：脫水速率 (${ufr.toFixed(1)} mL/kg/hr) 過快！有誘發心肌頓抑風險，強烈建議拉長單次透析時間或增加每週頻率。`;
         }
 
-        // 計算 Kt/V = (K * t) / V
+        // 5. 動力學運算 (Kt/V 模型)
         const time_mins = hours * 60;
-        const singleKtV = (estK * time_mins) / volume_V_mL;
-        const weeklyKtV = singleKtV * freq;
+        
+        // 單次 spKt/V (Single-pool)
+        const spKtV = (estK_mL_min * time_mins) / volume_V_mL;
+        
+        // 每週總 Kt/V
+        const weeklyKtV = spKtV * freq;
 
-        // 渲染結果
+        // 預期 stdKt/V (採用 Daugirdas eKt/V 與 Leypoldt 標準化公式近似)
+        // 步驟 A: 轉換為 eKt/V (考量停機後毒素反彈)
+        const eKtV = spKtV - (0.6 * (spKtV / hours)) + 0.03;
+        
+        // 步驟 B: 計算 stdKt/V (固定體積連續清除率模型)
+        // 168 為每週總小時數
+        const stdKtV = (168 * (1 - Math.exp(-eKtV))) / (hours + (168 / (freq * (eKtV / hours))));
+
+        // 6. UI 渲染
         document.getElementById('resultCard').style.display = 'block';
         
         const alertBox = document.getElementById('alertBox');
@@ -247,22 +292,23 @@
 
         document.getElementById('resMode').innerText = mode;
         document.getElementById('resUf').innerText = ufVolume_L.toFixed(1);
-        document.getElementById('resFreqTime').innerText = `每週 ${freq} 次，每次 ${hours} 小時`;
+        document.getElementById('resFreqTime').innerText = `每週 ${freq} 次 / 每次 ${hours} 小時`;
         document.getElementById('resFlows').innerText = `Qb: ${qb} mL/min | Qd: ${qd} mL/min`;
         
         const ufrEl = document.getElementById('resUfr');
-        ufrEl.innerText = `${ufr.toFixed(1)} (${ufrStatus})`;
-        ufrEl.style.color = ufr > 13 ? "red" : (ufr > 10 ? "#ca8a04" : "green");
+        ufrEl.innerText = `${ufr.toFixed(1)} mL/kg/hr`;
+        ufrEl.style.color = ufr > 13 ? "var(--danger)" : (ufr > 10 ? "var(--warning)" : "var(--success)");
+        document.getElementById('resUfrBadge').innerText = ufrBadge;
 
-        document.getElementById('resKtV').innerText = singleKtV.toFixed(2);
+        document.getElementById('resSpKtV').innerText = spKtV.toFixed(2);
+        document.getElementById('resWeeklyKtV').innerText = weeklyKtV.toFixed(2);
         
-        const wkKtvEl = document.getElementById('resWeeklyKtV');
-        wkKtvEl.innerText = weeklyKtV.toFixed(2);
-        if(mode.includes("Short") && weeklyKtV < 2.1) {
-             wkKtvEl.innerText += " ⚠️ (未達每日透析建議指標)";
-             wkKtvEl.style.color = "red";
-        } else {
-             wkKtvEl.style.color = "inherit";
+        const stdKtVEl = document.getElementById('resStdKtV');
+        stdKtVEl.innerText = stdKtV.toFixed(2);
+        // stdKt/V 目標值：FHN 試驗建議通常大於 2.3
+        if (stdKtV < 2.3) {
+            stdKtVEl.innerText += " (未達理想值 2.3)";
+            stdKtVEl.style.color = "var(--warning)";
         }
     }
 </script>
