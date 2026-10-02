@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>居家血液透析 (HHD) 處方決策輔助系統</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #0284c7;
+      cursor: pointer;
+      appearance: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="p-2 bg-sky-600 text-white rounded-xl shadow-md flex items-center justify-center">
+          <i data-lucide="activity" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            HHD Clinical Decision Support
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">臨床實證導向</span>
+          </h1>
+          <p class="text-xs text-slate-500">居家血液透析個人化處方與安全超濾率（UFR）試算</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="resetBtn" class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> 重設參數
+        </button>
+        <button id="copyPrescriptionBtn" class="px-3.5 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
+          <i data-lucide="clipboard-copy" class="w-3.5 h-3.5"></i> 複製處方摘要
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Quick Guidelines Alert -->
+    <div class="mb-6 p-4 rounded-xl bg-sky-50 border border-sky-100 flex items-start gap-3 text-sm text-sky-900">
+      <i data-lucide="info" class="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5"></i>
+      <div>
+        <span class="font-semibold">臨床指引指引提示：</span>
+        依據國際實踐（法國 SDHHD、美加 Nocturnal HHD），超濾率（UFR）建議控制於 
+        <strong class="text-sky-950 font-bold">&lt; 10～12 mL/kg/hr</strong> 以避免心肌頓抑；夜間透析應搭配漏血感應器並限制血流速。
+      </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform transition-all duration-300 translate-y-12 opacity-0 pointer-events-none bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-2 text-sm">
+      <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+      <span id="toastMsg">處方摘要已複製至剪貼簿！</span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <section class="lg:col-span-5 space-y-6">
+        <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+          <h2 class="text-base font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+            <i data-lucide="sliders" class="w-5 h-5 text-sky-600"></i>
+            患者生理與檢驗指標
+          </h2>
+
+          <div class="space-y-5">
+            <!-- Dry Weight -->
+            <div>
+              <div class="flex justify-between items-center mb-1.5">
+                <label for="weightInput" class="text-sm font-medium text-slate-700">乾體重 (Dry Weight)</label>
+                <span class="text-sm font-bold text-sky-700"><span id="weightVal">60.0</span> kg</span>
+              </div>
+              <input type="range" id="weightInput" min="35" max="120" step="0.5" value="60" class="w-full accent-sky-600">
+              <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                <span>35 kg</span>
+                <span>75 kg</span>
+                <span>120 kg</span>
+              </div>
+            </div>
+
+            <!-- Interdialytic Weight Gain / Target UF -->
+            <div>
+              <div class="flex justify-between items-center mb-1.5">
+                <label for="ufInput" class="text-sm font-medium text-slate-700">單次預期脫水量 (Target UF)</label>
+                <span class="text-sm font-bold text-sky-700"><span id="ufVal">1.8</span> L</span>
+              </div>
+              <input type="range" id="ufInput" min="0.2" max="4.5" step="0.1" value="1.8" class="w-full accent-sky-600">
+              <p class="text-xs text-slate-400 mt-1">透析頻率愈高，每日體液蓄積量通常愈小 (常態約 1.0~2.0L)。</p>
+            </div>
+
+            <!-- Residual Urine Output -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">殘餘尿量 (RKF 評估)</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" data-rkf="high" class="rkf-btn py-2 px-3 text-xs font-medium rounded-lg border border-slate-200 text-slate-700 bg-white hover:border-sky-500 transition-all text-center">
+                  &gt; 500 mL/日
+                  <span class="block text-[10px] text-emerald-600 font-normal">保護殘存功能</span>
+                </button>
+                <button type="button" data-rkf="med" class="rkf-btn active py-2 px-3 text-xs font-medium rounded-lg border border-sky-600 text-sky-700 bg-sky-50/50 hover:border-sky-500 transition-all text-center">
+                  100 ~ 500 mL
+                  <span class="block text-[10px] text-amber-600 font-normal">輕微殘存</span>
+                </button>
+                <button type="button" data-rkf="anuric" class="rkf-btn py-2 px-3 text-xs font-medium rounded-lg border border-slate-200 text-slate-700 bg-white hover:border-sky-500 transition-all text-center">
+                  &lt; 100 mL/日
+                  <span class="block text-[10px] text-red-500 font-normal">無尿期 Anuric</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Electrolytes (Phosphate & Potassium) -->
+            <div class="grid grid-cols-2 gap-4 pt-1">
+              <div>
+                <label for="po4Input" class="block text-xs font-medium text-slate-700 mb-1">血磷 (Phosphate)</label>
+                <div class="relative">
+                  <input type="number" id="po4Input" step="0.1" min="1.5" max="12.0" value="5.8" 
+                    class="w-full rounded-lg border-slate-200 text-sm py-1.5 px-2.5 border focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                  <span class="absolute right-2.5 top-2 text-[10px] text-slate-400">mg/dL</span>
+                </div>
+                <p id="po4Notice" class="text-[11px] text-slate-400 mt-1">目標: 3.5 - 5.5</p>
+              </div>
+              <div>
+                <label for="kInput" class="block text-xs font-medium text-slate-700 mb-1">血鉀 (Potassium)</label>
+                <div class="relative">
+                  <input type="number" id="kInput" step="0.1" min="2.5" max="7.5" value="4.8" 
+                    class="w-full rounded-lg border-slate-200 text-sm py-1.5 px-2.5 border focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                  <span class="absolute right-2.5 top-2 text-[10px] text-slate-400">mEq/L</span>
+                </div>
+                <p id="kNotice" class="text-[11px] text-slate-400 mt-1">目標: 3.5 - 5.0</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vascular Access & Lifestyle Panel -->
+        <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+          <h2 class="text-base font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-5 h-5 text-sky-600"></i>
+            通路安全與生活型態
+          </h2>
+
+          <div class="space-y-4">
+            <!-- Access Type -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">血管通路類型 (Vascular Access)</label>
+              <select id="accessSelect" class="w-full rounded-lg border-slate-200 text-sm py-2 px-3 border focus:border-sky-500 focus:ring-1 focus:ring-sky-500 bg-white">
+                <option value="avf_mature" selected>自體動靜脈瘻管 (AVF) - 成熟良好</option>
+                <option value="avf_fragile">自體動靜脈瘻管 (AVF) - 較細或新生</option>
+                <option value="avg">人工血管 (AVG)</option>
+                <option value="permcath">長期雙腔穿刺導管 (Permcath)</option>
+              </select>
+            </div>
+
+            <!-- Lifestyle preference -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1.5">生活型態偏好 (Lifestyle Preference)</label>
+              <select id="schedulePref" class="w-full rounded-lg border-slate-200 text-sm py-2 px-3 border focus:border-sky-500 focus:ring-1 focus:ring-sky-500 bg-white">
+                <option value="nocturnal">喜好夜間進行 (利用睡眠 6-8 小時，白天正常工作)</option>
+                <option value="daily_short">偏好每日短時間 (2-2.5 小時，高自由度)</option>
+                <option value="flexible">無特定偏好 (依生理指標最佳解推薦)</option>
+              </select>
+            </div>
+
+            <!-- Care Partner & Space Switch -->
+            <div class="space-y-3 pt-2">
+              <label class="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 cursor-pointer transition-colors">
+                <div class="flex items-center gap-2.5">
+                  <i data-lucide="users" class="w-4 h-4 text-slate-600"></i>
+                  <div class="text-xs">
+                    <span class="font-medium text-slate-800 block">具備照護夥伴 (Care Partner)</span>
+                    <span class="text-slate-400 text-[11px]">家屬同住或受訓者能在旁備援</span>
+                  </div>
+                </div>
+                <input type="checkbox" id="carePartnerCheck" checked class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
+              </label>
+
+              <label class="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 cursor-pointer transition-colors">
+                <div class="flex items-center gap-2.5">
+                  <i data-lucide="home" class="w-4 h-4 text-slate-600"></i>
+                  <div class="text-xs">
+                    <span class="font-medium text-slate-800 block">居家水電空間條件符合標準</span>
+                    <span class="text-slate-400 text-[11px]">具獨立排水、接地電源與儲存空間</span>
+                  </div>
+                </div>
+                <input type="checkbox" id="homeEnvCheck" checked class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="lg:col-span-7 space-y-6">
+        <!-- Main Recommendation Card -->
+        <div id="recCard" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 transition-all duration-300">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider" id="recBadge">模式建議</span>
+            <div class="flex items-center text-xs text-slate-400 gap-1.5">
+              <i data-lucide="cpu" class="w-4 h-4 text-sky-600"></i>
+              演算法臨床適應度比對完成
+            </div>
+          </div>
+
+          <h3 id="recTitle" class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mb-2">
+            夜間長時居家血液透析 (Nocturnal HHD)
+          </h3>
+          <p id="recRationale" class="text-sm text-slate-600 leading-relaxed mb-6">
+            因單次脫水量較大且期望深層清除血磷，夜間 6～8 小時超長緩慢透析可大幅減少心肌頓抑，並具備溫和脫水效果。
+          </p>
+
+          <!-- Core Prescription Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+            <div class="p-3 bg-white rounded-lg border border-slate-100 shadow-2xs">
+              <div class="text-[11px] text-slate-500 flex items-center gap-1 mb-1">
+                <i data-lucide="calendar" class="w-3.5 h-3.5 text-sky-600"></i> 每週頻率
+              </div>
+              <div class="text-lg font-bold text-slate-800" id="prescFreq">3～4 晚/週</div>
+              <div class="text-[10px] text-slate-400">隔日或週一三五</div>
+            </div>
+
+            <div class="p-3 bg-white rounded-lg border border-slate-100 shadow-2xs">
+              <div class="text-[11px] text-slate-500 flex items-center gap-1 mb-1">
+                <i data-lucide="clock" class="w-3.5 h-3.5 text-sky-600"></i> 單次時間
+              </div>
+              <div class="text-lg font-bold text-slate-800" id="prescDuration">7.0 小時</div>
+              <div class="text-[10px] text-slate-400">於夜間睡眠進行</div>
+            </div>
+
+            <div class="p-3 bg-white rounded-lg border border-slate-100 shadow-2xs">
+              <div class="text-[11px] text-slate-500 flex items-center gap-1 mb-1">
+                <i data-lucide="droplet" class="w-3.5 h-3.5 text-red-500"></i> 血流速 Qb
+              </div>
+              <div class="text-lg font-bold text-slate-800" id="prescQb">250 mL/min</div>
+              <div class="text-[10px] text-slate-400">夜間安全限制</div>
+            </div>
+
+            <div class="p-3 bg-white rounded-lg border border-slate-100 shadow-2xs">
+              <div class="text-[11px] text-slate-500 flex items-center gap-1 mb-1">
+                <i data-lucide="gauge" class="w-3.5 h-3.5 text-emerald-600"></i> 透析液 Qd
+              </div>
+              <div class="text-lg font-bold text-slate-800" id="prescQd">200 mL/min</div>
+              <div class="text-[10px] text-slate-400">總耗量約 <span id="prescDialysateTotal">84</span> L</div>
+            </div>
+          </div>
+
+          <!-- UFR Gauge & Safety Assessment -->
+          <div class="p-4 rounded-xl border border-slate-200 mb-6 bg-white" id="ufrContainer">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <i data-lucide="heart-pulse" class="w-4 h-4 text-sky-600"></i>
+                超濾率安全監測 (Ultrafiltration Rate, UFR)
+              </span>
+              <div class="text-right">
+                <span class="text-lg font-bold font-mono" id="ufrValue">4.29</span>
+                <span class="text-xs text-slate-500">mL/kg/hr</span>
+              </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2">
+              <div id="ufrBar" class="h-full rounded-full transition-all duration-300 bg-emerald-500" style="width: 35%;"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-[11px]">
+              <span class="text-emerald-700 font-medium" id="ufrStatusText">安全範圍 (&lt; 10 mL/kg/hr)</span>
+              <span class="text-slate-400">警示臨界: 10.0 | 高危險臨界: 13.0</span>
+            </div>
+            <p id="ufrAdvice" class="text-xs text-slate-500 mt-2">
+              超濾速率溫和，對心肌灌流影響小，能維持平穩血壓。
+            </p>
+          </div>
+
+          <!-- Clinical Cautions & Warnings -->
+          <div class="space-y-2.5" id="warningsList">
+            <!-- Dynamic alerts inserted via JS -->
+          </div>
+        </div>
+
+        <!-- Comparative Reference Matrix Tab -->
+        <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+          <h4 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+            <i data-lucide="columns" class="w-4 h-4 text-sky-600"></i>
+            模式臨床優劣對照表 (SDHHD vs NHHD)
+          </h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-left text-slate-600 border border-slate-200 rounded-lg">
+              <thead class="bg-slate-50 text-slate-700 uppercase font-semibold">
+                <tr>
+                  <th class="py-2.5 px-3 border-b">比較項目</th>
+                  <th class="py-2.5 px-3 border-b text-sky-800">短時間每日 (SDHHD)</th>
+                  <th class="py-2.5 px-3 border-b text-indigo-800">夜間長時 (NHHD)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr>
+                  <td class="py-2 px-3 font-medium bg-slate-50/50">時間頻率</td>
+                  <td class="py-2 px-3">5~6 天/週，每次 2~2.5 小時</td>
+                  <td class="py-2 px-3">3~4 晚/週，每次 6~8 小時</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-medium bg-slate-50/50">磷清除表現</td>
+                  <td class="py-2 px-3">中等良好，需常規降磷劑</td>
+                  <td class="py-2 px-3 font-bold text-emerald-700">極佳，常需在透析液補磷</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-medium bg-slate-50/50">血流速 Qb 要求</td>
+                  <td class="py-2 px-3">高 (350~450 mL/min)</td>
+                  <td class="py-2 px-3">低至中 (200~250 mL/min) 安全性高</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-medium bg-slate-50/50">設備特性</td>
+                  <td class="py-2 px-3">小型攜帶式 (如 NxStage, 低耗水)</td>
+                  <td class="py-2 px-3">標準或超低流速機，需漏血感應</td>
+                </tr>
+                <tr>
+                  <td class="py-2 px-3 font-medium bg-slate-50/50">日常工作彈性</td>
+                  <td class="py-2 px-3">晨間/傍晚快速完成</td>
+                  <td class="py-2 px-3">完全不佔用日間清醒時段</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Safety Checklist Card -->
+        <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200">
+          <h4 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+            <i data-lucide="check-square" class="w-4 h-4 text-emerald-600"></i>
+            居家血液透析執行前核心安全查核清單 (Pre-implementation Checklist)
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-600">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer">
+              <input type="checkbox" checked class="rounded text-sky-600 focus:ring-0">
+              <span>穿刺部位漏血感應貼片 (Wetness Detector) 正常運作</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer">
+              <input type="checkbox" checked class="rounded text-sky-600 focus:ring-0">
+              <span>緊急連絡人 / 24H 醫護諮詢專線已建置</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer">
+              <input type="checkbox" checked class="rounded text-sky-600 focus:ring-0">
+              <span>透析機防脫針警報與動脈壓、靜脈壓上下限校正</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer">
+              <input type="checkbox" checked class="rounded text-sky-600 focus:ring-0">
+              <span>反滲透水質 (RO) 餘氯檢測合格及耗材充足</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="bg-white border-t border-slate-200 mt-10 py-5 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4">
+      本工具僅供臨床醫護人員與透析訓練病患決策輔助與學術評估參考，實際透析處方（包括抗凝劑劑量、乾體重校正）應由主治醫師綜合病患即時生理狀況開立。
+    </div>
+  </footer>
+
+  <script>
+    // State management
+    const state = {
+      weight: 60.0,
+      targetUF: 1.8,
+      rkf: 'med', // high, med, anuric
+      po4: 5.8,
+      k: 4.8,
+      access: 'avf_mature',
+      pref: 'nocturnal',
+      hasPartner: true,
+      hasEnv: true
+    };
+
+    // DOM Elements
+    const weightInput = document.getElementById('weightInput');
+    const weightVal = document.getElementById('weightVal');
+    const ufInput = document.getElementById('ufInput');
+    const ufVal = document.getElementById('ufVal');
+    const po4Input = document.getElementById('po4Input');
+    const kInput = document.getElementById('kInput');
+    const accessSelect = document.getElementById('accessSelect');
+    const schedulePref = document.getElementById('schedulePref');
+    const carePartnerCheck = document.getElementById('carePartnerCheck');
+    const homeEnvCheck = document.getElementById('homeEnvCheck');
+    const rkfBtns = document.querySelectorAll('.rkf-btn');
+
+    // Output DOM elements
+    const recBadge = document.getElementById('recBadge');
+    const recTitle = document.getElementById('recTitle');
+    const recRationale = document.getElementById('recRationale');
+    const prescFreq = document.getElementById('prescFreq');
+    const prescDuration = document.getElementById('prescDuration');
+    const prescQb = document.getElementById('prescQb');
+    const prescQd = document.getElementById('prescQd');
+    const prescDialysateTotal = document.getElementById('prescDialysateTotal');
+    const ufrValue = document.getElementById('ufrValue');
+    const ufrBar = document.getElementById('ufrBar');
+    const ufrStatusText = document.getElementById('ufrStatusText');
+    const ufrAdvice = document.getElementById('ufrAdvice');
+    const warningsList = document.getElementById('warningsList');
+
+    function initListeners() {
+      weightInput.addEventListener('input', (e) => {
+        state.weight = parseFloat(e.target.value);
+        weightVal.textContent = state.weight.toFixed(1);
+        calculateDecision();
+      });
+
+      ufInput.addEventListener('input', (e) => {
+        state.targetUF = parseFloat(e.target.value);
+        ufVal.textContent = state.targetUF.toFixed(1);
+        calculateDecision();
+      });
+
+      po4Input.addEventListener('input', (e) => {
+        state.po4 = parseFloat(e.target.value) || 0;
+        calculateDecision();
+      });
+
+      kInput.addEventListener('input', (e) => {
+        state.k = parseFloat(e.target.value) || 0;
+        calculateDecision();
+      });
+
+      accessSelect.addEventListener('change', (e) => {
+        state.access = e.target.value;
+        calculateDecision();
+      });
+
+      schedulePref.addEventListener('change', (e) => {
+        state.pref = e.target.value;
+        calculateDecision();
+      });
+
+      carePartnerCheck.addEventListener('change', (e) => {
+        state.hasPartner = e.target.checked;
+        calculateDecision();
+      });
+
+      homeEnvCheck.addEventListener('change', (e) => {
+        state.hasEnv = e.target.checked;
+        calculateDecision();
+      });
+
+      rkfBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          rkfBtns.forEach(b => {
+            b.classList.remove('border-sky-600', 'text-sky-700', 'bg-sky-50/50');
+            b.classList.add('border-slate-200', 'text-slate-700', 'bg-white');
+          });
+          btn.classList.add('border-sky-600', 'text-sky-700', 'bg-sky-50/50');
+          btn.classList.remove('border-slate-200', 'text-slate-700', 'bg-white');
+          state.rkf = btn.getAttribute('data-rkf');
+          calculateDecision();
+        });
+      });
+
+      document.getElementById('resetBtn').addEventListener('click', resetAll);
+      document.getElementById('copyPrescriptionBtn').addEventListener('click', copySummaryToClipboard);
+    }
+
+    function calculateDecision() {
+      // 1. Eligibility Check: Safe environment or Care Partner absence
+      let mode = 'NHHD'; // default candidate
+      let scoreNHHD = 0;
+      let scoreSDHHD = 0;
+
+      // Unmet prerequisites check
+      const envIssue = !state.hasEnv;
+      const partnerIssue = !state.hasPartner;
+
+      // Preference scoring
+      if (state.pref === 'nocturnal') scoreNHHD += 3;
+      if (state.pref === 'daily_short') scoreSDHHD += 3;
+
+      // Phosphate scoring: High phosphate favors nocturnal long duration
+      if (state.po4 >= 5.5) scoreNHHD += 2.5;
+      else if (state.po4 <= 3.5) scoreSDHHD += 1.5;
+
+      // Access suitability
+      if (state.access === 'permcath') {
+        // High Qb required for daily short is hard with catheter; favor nocturnal gentle Qb
+        scoreNHHD += 2;
+      } else if (state.access === 'avf_mature') {
+        scoreSDHHD += 1;
+        scoreNHHD += 1;
+      }
+
+      // Target UF: High fluid volume favors nocturnal to keep UFR low
+      if (state.targetUF >= 2.5) scoreNHHD += 2;
+
+      // Check In-Center or Special Care requirements
+      let isCandidate = true;
+      let inCenterReason = '';
+
+      if (envIssue) {
+        isCandidate = false;
+        inCenterReason = '居家水電排水與防護空間條件未合格，建議先於院所透析，待水電工程改善並評估合格後再行轉出。';
+      } else if (partnerIssue && state.access === 'permcath') {
+        isCandidate = false;
+        inCenterReason = '缺乏同住照護夥伴且為雙腔導管通路，夜間自主透析脫管致死風險高，需進一步專科評估。';
+      }
+
+      // Determine Mode
+      if (!isCandidate) {
+        mode = 'IN_CENTER';
+      } else {
+        mode = (scoreNHHD >= scoreSDHHD) ? 'NHHD' : 'SDHHD';
+      }
+
+      // Calculate Prescription parameters based on mode
+      let freq, duration, qb, qd, dialysateTotal;
+
+      if (mode === 'NHHD') {
+        freq = (state.rkf === 'anuric') ? '4～5 晚/週' : '3～4 晚/週';
+        duration = 7.0; // hours
+        // Nocturnal limits Qb to prevent high venous needle detachment pressure
+        qb = (state.access === 'permcath') ? 220 : 250; 
+        qd = 200; // mL/min for low flow slow dialysis
+        dialysateTotal = Math.round((qd * (duration * 60)) / 1000);
+      } else if (mode === 'SDHHD') {
+        freq = (state.rkf === 'high') ? '5 次/週' : '5～6 次/週';
+        duration = 2.5; // hours
+        // Short daily requires higher clearance
+        qb = (state.access === 'permcath' || state.access === 'avf_fragile') ? 320 : 400;
+        qd = 180; // mL/min (e.g. low-volume machines NxStage 20-30L)
+        dialysateTotal = Math.round((qd * (duration * 60)) / 1000);
+      } else {
+        freq = '3 次/週';
+        duration = 4.0;
+        qb = 300;
+        qd = 500;
+        dialysateTotal = 120;
+      }
+
+      // Calculate Ultrafiltration Rate (UFR) in mL/kg/hr
+      // UFR = (Target UF in mL) / (Weight in kg * Duration in hr)
+      const ufr = ((state.targetUF * 1000) / (state.weight * duration));
+
+      updateUI(mode, freq, duration, qb, qd, dialysateTotal, ufr, inCenterReason);
+    }
+
+    function updateUI(mode, freq, duration, qb, qd, dialysateTotal, ufr, inCenterReason) {
+      const recCard = document.getElementById('recCard');
+      const warnings = [];
+
+      // Mode Branding & Badges
+      if (mode === 'NHHD') {
+        recBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-indigo-100 text-indigo-800';
+        recBadge.textContent = '首選推薦：夜間長時居家透析 (NHHD)';
+        recTitle.textContent = '夜間長時居家血液透析 (Nocturnal HHD)';
+        recRationale.textContent = `患者目標脫水量為 ${state.targetUF}L，長達 ${duration} 小時之睡眠透析能將溶質緩慢移轉，深層清除高分子毒素與血磷（當前磷 ${state.po4} mg/dL），心血管耐受性極佳。`;
+        recCard.className = 'bg-white rounded-2xl p-6 shadow-sm border-2 border-indigo-200 transition-all duration-300';
+      } else if (mode === 'SDHHD') {
+        recBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-sky-100 text-sky-800';
+        recBadge.textContent = '首選推薦：短時間每日透析 (SDHHD)';
+        recTitle.textContent = '短時間每日居家血液透析 (Short Daily HHD)';
+        recRationale.textContent = `配合每週高頻率 (${freq}) 進行 2～2.5 小時透析，單次脫水負擔低，適合日程緊湊、工作生活彈性要求高且血管通路狀況良好者。`;
+        recCard.className = 'bg-white rounded-2xl p-6 shadow-sm border-2 border-sky-200 transition-all duration-300';
+      } else {
+        recBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-amber-100 text-amber-800';
+        recBadge.textContent = '暫緩居家執行：需臨床強化輔助';
+        recTitle.textContent = '建議回歸院所透析 (In-Center HD) 或強化評估';
+        recRationale.textContent = inCenterReason;
+        recCard.className = 'bg-white rounded-2xl p-6 shadow-sm border-2 border-amber-300 transition-all duration-300';
+      }
+
+      // Fill prescription values
+      prescFreq.textContent = freq;
+      prescDuration.textContent = `${duration.toFixed(1)} 小時`;
+      prescQb.textContent = `${qb} mL/min`;
+      prescQd.textContent = `${qd} mL/min`;
+      prescDialysateTotal.textContent = dialysateTotal;
+
+      // UFR Display & Gauges
+      ufrValue.textContent = ufr.toFixed(2);
+      const ufrPercent = Math.min(100, Math.max(5, (ufr / 16) * 100));
+      ufrBar.style.width = `${ufrPercent}%`;
+
+      if (ufr < 10) {
+        ufrBar.className = 'h-full rounded-full transition-all duration-300 bg-emerald-500';
+        ufrStatusText.className = 'text-emerald-700 font-medium';
+        ufrStatusText.textContent = '超濾安全標準 (< 10 mL/kg/hr)';
+        ufrAdvice.textContent = '超濾速率低且平穩，能預防透析中低血壓與心肌缺血頓抑。';
+      } else if (ufr >= 10 && ufr <= 13) {
+        ufrBar.className = 'h-full rounded-full transition-all duration-300 bg-amber-500';
+        ufrStatusText.className = 'text-amber-700 font-medium';
+        ufrStatusText.textContent = '警戒臨界區 (10 ~ 13 mL/kg/hr)';
+        ufrAdvice.textContent = '警示：超濾率偏高。建議加強鹽分水份控制，或考慮增加透析頻率/延長單次時數以平攤脫水。';
+        warnings.push({
+          type: 'warning',
+          icon: 'alert-triangle',
+          text: `當前預估 UFR 為 ${ufr.toFixed(2)} mL/kg/hr。若病患出現痙攣或血壓不穩，應優先「拉長透析時間」而非加快脫水。`
+        });
+      } else {
+        ufrBar.className = 'h-full rounded-full transition-all duration-300 bg-rose-500';
+        ufrStatusText.className = 'text-rose-700 font-medium font-bold';
+        ufrStatusText.textContent = '超標高風險 (> 13 mL/kg/hr)';
+        ufrAdvice.textContent = '危險警訊：脫水過速與心血管死亡率顯著相關！強烈建議延長透析時間或增加每週次數。';
+        warnings.push({
+          type: 'danger',
+          icon: 'alert-octagon',
+          text: 'UFR 嚴重超標！單次脫水量過大，現行處方時間不足，有極高血壓驟降與心肌頓抑風險。'
+        });
+      }
+
+      // Phosphate adjustment
+      if (mode === 'NHHD' && state.po4 < 4.0) {
+        warnings.push({
+          type: 'info',
+          icon: 'info',
+          text: `血磷 ${state.po4} mg/dL：夜間長時間透析磷清除力極強，常發生「低血磷症」。建議與醫師討論於透析液中加入磷酸鹽或放寬飲食磷限制。`
+        });
+      } else if (state.po4 > 6.0) {
+        warnings.push({
+          type: 'warning',
+          icon: 'alert-circle',
+          text: `血磷偏高 (${state.po4} mg/dL)：請嚴格審視磷結合劑服用時機，長時夜間透析對降磷效果顯著優於短時透析。`
+        });
+      }
+
+      // Potassium check
+      if (state.k >= 5.5) {
+        warnings.push({
+          type: 'danger',
+          icon: 'flame',
+          text: `高血鉀警訊 (${state.k} mEq/L)：透析液鉀離子濃度建議設定為 2.0 mEq/L，並需即時確認心電圖與飲食防護。`
+        });
+      } else if (state.k < 3.8) {
+        warnings.push({
+          type: 'info',
+          icon: 'info',
+          text: `血鉀偏低 (${state.k} mEq/L)：建議將透析液鉀濃度調整為 3.0 mEq/L，避免透析中心律不整。`
+        });
+      }
+
+      // Access checks
+      if (mode === 'NHHD') {
+        warnings.push({
+          type: 'neutral',
+          icon: 'shield-alert',
+          text: '夜間無人監看透析必備：穿刺點須配戴「漏血感應警報貼片 (Wetness Detector)」，且血流速 Qb 嚴格上限 ≤ 250 mL/min。'
+        });
+      }
+
+      if (mode === 'SDHHD' && (state.access === 'avf_fragile' || state.access === 'permcath')) {
+        warnings.push({
+          type: 'warning',
+          icon: 'alert-triangle',
+          text: '短時間每日透析需較高血流速 (Qb 350~400)，目前血管通路恐無法承受高負壓，需確認穿刺針號 (15G) 或通路血流量 (Qa)。'
+        });
+      }
+
+      // Render Warnings
+      renderWarnings(warnings);
+    }
+
+    function renderWarnings(warnings) {
+      warningsList.innerHTML = '';
+      if (warnings.length === 0) return;
+
+      warnings.forEach(w => {
+        const item = document.createElement('div');
+        let bg = 'bg-slate-50 border-slate-200 text-slate-700';
+        let iconColor = 'text-slate-500';
+
+        if (w.type === 'danger') {
+          bg = 'bg-rose-50 border-rose-200 text-rose-800';
+          iconColor = 'text-rose-600';
+        } else if (w.type === 'warning') {
+          bg = 'bg-amber-50 border-amber-200 text-amber-800';
+          iconColor = 'text-amber-600';
+        } else if (w.type === 'info') {
+          bg = 'bg-sky-50 border-sky-200 text-sky-800';
+          iconColor = 'text-sky-600';
+        }
+
+        item.className = `p-3 rounded-xl border flex items-start gap-2.5 text-xs ${bg}`;
+        item.innerHTML = `
+          <i data-lucide="${w.icon}" class="w-4 h-4 ${iconColor} flex-shrink-0 mt-0.5"></i>
+          <span class="leading-relaxed">${w.text}</span>
+        `;
+        warningsList.appendChild(item);
+      });
+
+      lucide.createIcons();
+    }
+
+    function resetAll() {
+      state.weight = 60.0;
+      state.targetUF = 1.8;
+      state.rkf = 'med';
+      state.po4 = 5.8;
+      state.k = 4.8;
+      state.access = 'avf_mature';
+      state.pref = 'nocturnal';
+      state.hasPartner = true;
+      state.hasEnv = true;
+
+      weightInput.value = 60;
+      weightVal.textContent = '60.0';
+      ufInput.value = 1.8;
+      ufVal.textContent = '1.8';
+      po4Input.value = 5.8;
+      kInput.value = 4.8;
+      accessSelect.value = 'avf_mature';
+      schedulePref.value = 'nocturnal';
+      carePartnerCheck.checked = true;
+      homeEnvCheck.checked = true;
+
+      rkfBtns.forEach(btn => {
+        if (btn.getAttribute('data-rkf') === 'med') {
+          btn.classList.add('border-sky-600', 'text-sky-700', 'bg-sky-50/50');
+          btn.classList.remove('border-slate-200', 'text-slate-700', 'bg-white');
+        } else {
+          btn.classList.remove('border-sky-600', 'text-sky-700', 'bg-sky-50/50');
+          btn.classList.add('border-slate-200', 'text-slate-700', 'bg-white');
+        }
+      });
+
+      calculateDecision();
+      showToast('已重設為標準臨床參考預設值');
+    }
+
+    function copySummaryToClipboard() {
+      const summaryText = `【居家血液透析 (HHD) 處方評估摘要】
+-------------------------------------
+- 患者乾體重: ${state.weight.toFixed(1)} kg
+- 預期單次脫水: ${state.targetUF.toFixed(1)} L
+- 殘餘腎功能尿量: ${state.rkf === 'high' ? '>500 mL/日' : state.rkf === 'med' ? '100-500 mL/日' : '<100 mL/日 (無尿)'}
+- 生化指標: 血磷 ${state.po4} mg/dL | 血鉀 ${state.k} mEq/L
+- 血管通路: ${accessSelect.options[accessSelect.selectedIndex].text}
+-------------------------------------
+[建議透析模式]: ${recTitle.textContent}
+- 每週頻率: ${prescFreq.textContent}
+- 單次時間: ${prescDuration.textContent}
+- 血流速 (Qb): ${prescQb.textContent}
+- 透析液流速 (Qd): ${prescQd.textContent} (總量約 ${prescDialysateTotal.textContent} L)
+- 預估超濾率 (UFR): ${ufrValue.textContent} mL/kg/hr (${ufrStatusText.textContent})
+-------------------------------------
+評估工具依據法國 SDHHD 及美國 Nocturnal HHD 實踐標準生成。`;
+
+      const el = document.createElement('textarea');
+      el.value = summaryText;
+      el.setAttribute('readonly', '');
+      el.style.position = 'absolute';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+
+      showToast('處方評估摘要已成功複製至剪貼簿！');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = msg;
+      toast.classList.remove('translate-y-12', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-12', 'opacity-0');
+      }, 2500);
+    }
+
+    // Initialize application
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initListeners();
+      calculateDecision();
+    });
+  </script>
+</body>
+</html>
