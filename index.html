@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>居家血液透析(HHD)處方與 stdKt/V 決策評估系統</title>
+    <title>居家血液透析(HHD)處方決策與 stdKt/V 試算模型</title>
     <style>
         :root {
             --primary: #0f766e;
@@ -11,6 +11,7 @@
             --success: #16a34a;
             --warning: #d97706;
             --danger: #dc2626;
+            --info: #2563eb;
             --bg: #f0fdfa;
             --card-bg: #ffffff;
         }
@@ -108,6 +109,7 @@
         .alert-success { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
         .alert-warning { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
         .alert-danger { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert-info { background-color: #dbeafe; color: #1e3a8a; border: 1px solid #bfdbfe; font-size: 0.9em; margin-bottom: 15px;}
         .data-row {
             display: flex;
             justify-content: space-between;
@@ -129,20 +131,19 @@
 <body>
 
 <div class="container">
-    <h1>居家血液透析 (HHD) 處方決策與 stdKt/V 試算模型</h1>
+    <h1>居家血液透析 (HHD) 動態處方優化與 stdKt/V 決策</h1>
     
     <div class="grid">
         <!-- 參數輸入區 -->
         <div class="card">
-            <h3>📝 臨床生理參數與目標</h3>
-            
+            <h3>📝 臨床生理參數</h3>
             <div class="form-group">
                 <label>現在體重 (Current Weight) <small>kg</small></label>
-                <input type="number" id="currentWt" value="70.5" step="0.1">
+                <input type="number" id="currentWt" value="75.5" step="0.1">
             </div>
             <div class="form-group">
                 <label>乾體重 (Dry Weight) <small>kg</small></label>
-                <input type="number" id="dryWt" value="68.0" step="0.1">
+                <input type="number" id="dryWt" value="72.0" step="0.1">
             </div>
             <div class="form-group">
                 <label>目前肌酸酐 (Serum Cr) <small>mg/dL</small></label>
@@ -150,13 +151,13 @@
             </div>
             <div class="form-group">
                 <label>血磷 (Phosphate) <small>mg/dL</small></label>
-                <input type="number" id="phos" value="6.8" step="0.1">
+                <input type="number" id="phos" value="5.8" step="0.1">
             </div>
             <div class="form-group">
                 <label>殘餘尿量 (Residual Urine) <small>mL/day</small></label>
                 <input type="number" id="urine" value="150" step="50">
             </div>
-            <button onclick="calculatePrescription()">執行處方推算與動力學分析</button>
+            <button onclick="calculatePrescription()">生成最佳化處方</button>
         </div>
 
         <!-- 決策結果區 -->
@@ -164,6 +165,7 @@
             <h3>📊 處方建議與清除率指標</h3>
             
             <div id="alertBox" class="alert"></div>
+            <div id="optimizationAlert" class="alert-info" style="display: none;"></div>
 
             <div class="data-row">
                 <span>系統推薦模式:</span>
@@ -173,9 +175,9 @@
                 <span>預估單次脫水量 (UF):</span>
                 <span class="highlight"><span id="resUf"></span> L</span>
             </div>
-            <div class="data-row">
-                <span>建議頻率與時數:</span>
-                <span id="resFreqTime" style="font-weight: 600;"></span>
+            <div class="data-row" style="background: #e0f2fe; padding: 12px; border-radius: 6px;">
+                <span style="color: var(--info); font-weight: bold;">優化後處方 (頻率/時數):</span>
+                <span id="resFreqTime" style="font-weight: 900; color: var(--info); font-size: 1.2em;"></span>
             </div>
             <div class="data-row">
                 <span>流速設定 (Qb / Qd):</span>
@@ -195,19 +197,27 @@
                 <span>單次 spKt/V 估算:</span>
                 <span id="resSpKtV"></span>
             </div>
-            <div class="data-row">
-                <span>每週總 Kt/V:</span>
-                <span id="resWeeklyKtV"></span>
-            </div>
-            <div class="data-row" style="background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 8px;">
-                <span style="font-weight: 600; color: var(--primary);">預期 stdKt/V (標準化):</span>
-                <span class="highlight" id="resStdKtV" style="font-size: 1.3em;"></span>
+            <div class="data-row" style="background: #f8fafc; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 4px solid var(--success);">
+                <span style="font-weight: 600; color: var(--success);">預期 stdKt/V (達標 ≥ 2.3):</span>
+                <span class="highlight" id="resStdKtV" style="font-size: 1.3em; color: var(--success);"></span>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+    // 計算 stdKt/V 的核心模組
+    function calculateKinetics(estK_mL_min, hours, freq, volume_V_mL) {
+        const time_mins = hours * 60;
+        const spKtV = (estK_mL_min * time_mins) / volume_V_mL;
+        // Daugirdas eKt/V
+        const eKtV = spKtV - (0.6 * (spKtV / hours)) + 0.03;
+        // Leypoldt stdKt/V
+        const stdKtV = (168 * (1 - Math.exp(-eKtV))) / (hours + (168 / (freq * (eKtV / hours))));
+        
+        return { spKtV, eKtV, stdKtV };
+    }
+
     function calculatePrescription() {
         const currentWt = parseFloat(document.getElementById('currentWt').value);
         const dryWt = parseFloat(document.getElementById('dryWt').value);
@@ -216,79 +226,100 @@
         const urine = parseFloat(document.getElementById('urine').value);
 
         if (currentWt <= dryWt) {
-            alert("錯誤：現在體重必須大於乾體重，以計算有效脫水量。");
+            alert("錯誤：現在體重必須大於乾體重。");
             return;
         }
 
-        // 1. 脫水體積計算
         const ufVolume_L = currentWt - dryWt;
         const ufVolume_mL = ufVolume_L * 1000;
-        
-        // 2. 估算尿素分佈體積 (V) - Watson簡化模型 (約乾體重 55%)
         const volume_V_L = dryWt * 0.55;
         const volume_V_mL = volume_V_L * 1000;
 
         let mode, freq, hours, qb, qd, estK_mL_min;
+        let isOptimized = false;
+        let baselineMsg = "";
 
-        // 3. 核心決策邏輯：整合 Cr、尿量與血磷
-        // 高毒素(Cr>10)且少尿、或血磷難以控制、或需大量脫水(>3L) -> 優先推薦 NHHD
+        // 基準決策邏輯
         if (phos >= 6.0 || ufVolume_L >= 3.0 || (cr >= 10.0 && urine <= 200)) {
             mode = "夜間長時透析 (Nocturnal HHD)";
-            freq = 4;        // 每週 4 晚 (隔日)
-            hours = 7.5;     // 每次 7.5 小時
-            qb = 220;        // 降低血流速保護瘻管與心臟
+            freq = 4;        
+            hours = 7.0;     
+            qb = 220;        
             qd = 300; 
             estK_mL_min = 155; 
         } else {
             mode = "短時間每日透析 (Short Daily HHD)";
-            freq = 5;        // 每週 5 次
-            hours = 2.5;     // 每次 2.5 小時
-            qb = 350;        // 較高血流速
+            freq = 5;        
+            hours = 2.5;     
+            qb = 350;        
             qd = 400; 
             estK_mL_min = 230; 
         }
 
-        // 4. 超濾率 (UFR) 計算 (mL/kg/hr)
+        // 動態處方優化 (Auto-escalation to meet stdKt/V >= 2.3)
+        let kinetics = calculateKinetics(estK_mL_min, hours, freq, volume_V_mL);
+        
+        if (kinetics.stdKtV < 2.3) {
+            isOptimized = true;
+            baselineMsg = `基準處方 (每週 ${freq} 次 / 每次 ${hours} 小時) 的 stdKt/V 僅 ${kinetics.stdKtV.toFixed(2)}，未達 FHN 標準，系統已啟動處方升級。`;
+            
+            if (mode.includes("Short Daily")) {
+                // SDHHD 升級路徑：先拉長時數 (最高3.5h)，再增加天數 (最高6天)
+                while (kinetics.stdKtV < 2.3 && (hours < 3.5 || freq < 6)) {
+                    if (hours < 3.5) {
+                        hours += 0.5;
+                    } else if (freq < 6) {
+                        freq += 1;
+                    }
+                    kinetics = calculateKinetics(estK_mL_min, hours, freq, volume_V_mL);
+                }
+            } else {
+                // NHHD 升級路徑：先增加天數(最高5晚)，再拉長時數(最高8h)，極端再加至6晚
+                while (kinetics.stdKtV < 2.3 && (freq < 6 || hours < 8)) {
+                    if (freq < 5) {
+                        freq += 1;
+                    } else if (hours < 8) {
+                        hours += 0.5;
+                    } else if (freq < 6) {
+                        freq += 1;
+                    }
+                    kinetics = calculateKinetics(estK_mL_min, hours, freq, volume_V_mL);
+                }
+            }
+        }
+
+        // UFR 計算 (需使用優化後最終的 hours)
         const ufr = ufVolume_mL / (dryWt * hours);
         let ufrBadge = "", alertClass = "", alertMsg = "";
 
         if (ufr <= 10) {
             ufrBadge = "🟢 最佳安全區";
             alertClass = "alert-success";
-            alertMsg = "心血管負荷極低，目前的脫水速率與透析時間設定非常安全。";
+            alertMsg = "心血管負荷極低，脫水速率與透析處方安全。";
         } else if (ufr <= 13) {
             ufrBadge = "🟡 臨界監測區";
             alertClass = "alert-warning";
-            alertMsg = "UFR 介於 10-13 mL/kg/hr，尚在可接受範圍，但請密切注意血壓波動。";
+            alertMsg = "UFR 介於 10-13 mL/kg/hr，尚在可接受範圍，請注意血壓。";
         } else {
             ufrBadge = "🔴 危險區域";
             alertClass = "alert-danger";
-            alertMsg = `⚠️ 警告：脫水速率 (${ufr.toFixed(1)} mL/kg/hr) 過快！有誘發心肌頓抑風險，強烈建議拉長單次透析時間或增加每週頻率。`;
+            alertMsg = `⚠️ 警告：脫水速率 (${ufr.toFixed(1)} mL/kg/hr) 過快！有誘發心肌頓抑風險。`;
         }
 
-        // 5. 動力學運算 (Kt/V 模型)
-        const time_mins = hours * 60;
-        
-        // 單次 spKt/V (Single-pool)
-        const spKtV = (estK_mL_min * time_mins) / volume_V_mL;
-        
-        // 每週總 Kt/V
-        const weeklyKtV = spKtV * freq;
-
-        // 預期 stdKt/V (採用 Daugirdas eKt/V 與 Leypoldt 標準化公式近似)
-        // 步驟 A: 轉換為 eKt/V (考量停機後毒素反彈)
-        const eKtV = spKtV - (0.6 * (spKtV / hours)) + 0.03;
-        
-        // 步驟 B: 計算 stdKt/V (固定體積連續清除率模型)
-        // 168 為每週總小時數
-        const stdKtV = (168 * (1 - Math.exp(-eKtV))) / (hours + (168 / (freq * (eKtV / hours))));
-
-        // 6. UI 渲染
+        // UI 渲染
         document.getElementById('resultCard').style.display = 'block';
         
         const alertBox = document.getElementById('alertBox');
         alertBox.className = "alert " + alertClass;
         alertBox.innerHTML = alertMsg;
+
+        const optAlert = document.getElementById('optimizationAlert');
+        if (isOptimized) {
+            optAlert.style.display = "block";
+            optAlert.innerHTML = `💡 <b>處方自動升級機制啟動</b>：<br>${baselineMsg}`;
+        } else {
+            optAlert.style.display = "none";
+        }
 
         document.getElementById('resMode').innerText = mode;
         document.getElementById('resUf').innerText = ufVolume_L.toFixed(1);
@@ -300,15 +331,15 @@
         ufrEl.style.color = ufr > 13 ? "var(--danger)" : (ufr > 10 ? "var(--warning)" : "var(--success)");
         document.getElementById('resUfrBadge').innerText = ufrBadge;
 
-        document.getElementById('resSpKtV').innerText = spKtV.toFixed(2);
-        document.getElementById('resWeeklyKtV').innerText = weeklyKtV.toFixed(2);
+        document.getElementById('resSpKtV').innerText = kinetics.spKtV.toFixed(2);
         
         const stdKtVEl = document.getElementById('resStdKtV');
-        stdKtVEl.innerText = stdKtV.toFixed(2);
-        // stdKt/V 目標值：FHN 試驗建議通常大於 2.3
-        if (stdKtV < 2.3) {
-            stdKtVEl.innerText += " (未達理想值 2.3)";
-            stdKtVEl.style.color = "var(--warning)";
+        stdKtVEl.innerText = kinetics.stdKtV.toFixed(2);
+        
+        // 極端體重或脫水情況可能導致升級到極限仍未達 2.3
+        if (kinetics.stdKtV < 2.3) {
+            stdKtVEl.innerText += " (已達參數上限，仍未達理想值 2.3，建議重新評估通路血流速)";
+            stdKtVEl.style.color = "var(--danger)";
         }
     }
 </script>
