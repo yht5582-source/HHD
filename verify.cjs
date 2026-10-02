@@ -20,8 +20,20 @@ set('rkf','');run('render()');assert.match(el('recommendation').innerHTML,/殘�
 set('rkf','measured');set('kru','');run('render()');assert.match(el('recommendation').innerHTML,/量測 Kru/);
 set('weight',-2);run('render()');assert.match(el('recommendation').innerHTML,/乾體重超出有效範圍/);
 el('demo').onclick();set('maxDays',3.5);run('render()');assert.match(el('recommendation').innerHTML,/必須是整數/);
-el('demo').onclick();for(const m of ['standard','short','long','night'])set('k_'+m,'');run('render()');assert.match(el('recommendation').innerHTML,/尚無可比較處方/);
+el('demo').onclick();set('stage','treated');for(const m of ['standard','short','long','night'])set('k_'+m,'');run('render()');assert.match(el('recommendation').innerHTML,/尚無可比較處方/);
 el('demo').onclick();set('urineVolume',600);set('urineHours',24);set('urineBUN',400);set('meanBUN',50);el('calcKru').onclick();assert.equal(el('kru').value,'3.333');
 el('demo').onclick();set('willing','no');run('render()');assert.match(el('eligibility').innerHTML,/目前不選擇居家透析/);
 el('demo').onclick();set('weeklyUF',35);run('render()');assert.match(el('improvements').innerHTML,/尖峰 UFR 偏高/);
 console.log('PASS: numerical reference, renal/UF correction, missing data, four-mode comparison, safety gates, solo support, input validation, timed urine and high-UF improvement.');
+
+// A new patient must be able to plan without any measured K or previous Kt/V.
+el('demo').onclick();for(const m of ['standard','short','long','night'])set('k_'+m,'');run('render()');assert.match(el('recommendation').innerHTML,/初始處方候選/);assert.match(el('recommendation').innerHTML,/模型估算 K/);assert.match(el('recommendation').innerHTML,/不能宣稱實際達標/);assert.match(el('comparison').innerHTML,/假設情境/);
+assert.equal(el('measuredBox').style.display,'none');assert.equal(el('planningBox').style.display,'block');
+const equal=run('modeledClearance(300,300,900)');assert.ok(Math.abs(equal-225)<1e-10);
+for(const qb of [100,200,350,500])for(const qd of [100,200,500,800]){const k=run(`modeledClearance(${qb},${qd},800)`);assert.ok(k>0&&k<Math.min(qb,qd));}
+const prior=run('planningK(modes[0])');set('qd_standard',200);assert.ok(run('planningK(modes[0])')<prior);
+set('equipment','koa');set('koa','');run('render()');assert.match(el('recommendation').innerHTML,/廠商尿素 KoA/);set('koa',1000);run('render()');assert.match(el('recommendation').innerHTML,/廠商 KoA 模型/);
+set('discount',110);run('render()');assert.match(el('recommendation').innerHTML,/50–100/);
+el('demo').onclick();set('stage','treated');run('render()');assert.equal(el('planningBox').style.display,'none');assert.equal(el('measuredBox').style.display,'block');assert.match(el('recommendation').innerHTML,/輸入平均 K/);
+el('reset').onclick();assert.equal(el('stage').value,'pre');assert.match(el('eligibility').innerHTML,/資料不足/);
+console.log('PASS: pre-dialysis planning without measured clearance, theoretical model limits, equipment specification validation, post-treatment mode and reset.');
