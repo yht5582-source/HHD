@@ -1,584 +1,79 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HHD Clinical Decision Support</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
-        
-        body {
-            font-family: 'Inter', 'Noto Sans TC', sans-serif;
-            background-color: #f8fafc;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        /* 客製化 Range Slider 樣式 */
-        input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-            margin: 10px 0;
-        }
-        input[type=range]:focus {
-            outline: none;
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 6px;
-            cursor: pointer;
-            background: #e2e8f0; /* 預設軌道顏色 */
-            border-radius: 999px;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            background: #0284c7; /* 主題藍 */
-            cursor: pointer;
-            -webkit-appearance: none;
-            margin-top: -7px;
-            box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.15);
-            transition: transform 0.1s;
-        }
-        input[type=range]::-webkit-slider-thumb:hover {
-            transform: scale(1.1);
-        }
-        
-        /* 動態進度條過渡效果 */
-        .progress-bar-transition {
-            transition: width 0.5s ease-in-out, background-color 0.3s;
-        }
-
-        /* 隱藏數字輸入框的上下箭頭 */
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
-    </style>
-</head>
-<body class="text-slate-800 min-h-screen flex flex-col">
-
-    <!-- 頂部導覽列 -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <!-- Logo Icon -->
-                <div class="w-10 h-10 bg-[#0284c7] text-white rounded-xl shadow-sm flex items-center justify-center">
-                    <i data-lucide="activity" class="w-6 h-6"></i>
-                </div>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h1 class="text-[1.1rem] font-bold text-slate-900 tracking-tight">HHD Clinical Decision Support</h1>
-                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-[#0284c7]">臨床實證導向</span>
-                    </div>
-                    <p class="text-[11px] text-slate-500 mt-0.5">居家血液透析個人化處方與安全超濾率 (UFR) 試算</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-3">
-                <button onclick="resetParams()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> 重設參數
-                </button>
-                <button onclick="copySummary()" class="px-4 py-2 text-sm font-medium text-white bg-[#0284c7] hover:bg-[#0369a1] rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-                    <i data-lucide="clipboard-copy" class="w-4 h-4"></i> 複製處方摘要
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- 主要內容區 -->
-    <main class="flex-grow max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            <!-- 左欄：輸入區 -->
-            <div class="lg:col-span-5 space-y-6">
-                
-                <!-- 卡片：患者生理與檢驗指標 -->
-                <div class="bg-white rounded-2xl p-6 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)] border border-slate-100">
-                    <h2 class="text-base font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-[#0284c7]"></i>
-                        患者生理與檢驗指標
-                    </h2>
-
-                    <div class="space-y-7">
-                        <!-- 乾體重 Slider -->
-                        <div>
-                            <div class="flex justify-between items-end mb-1">
-                                <label class="text-sm font-medium text-slate-700">乾體重 (Dry Weight)</label>
-                                <span class="text-lg font-bold text-[#0284c7]"><span id="valDryWt">65.0</span> kg</span>
-                            </div>
-                            <input type="range" id="dryWt" min="35" max="120" step="0.5" value="65.0" oninput="updateSliderTrack(this); triggerCalculation();">
-                            <div class="flex justify-between text-[11px] text-slate-400 mt-1">
-                                <span>35 kg</span>
-                                <span>75 kg</span>
-                                <span>120 kg</span>
-                            </div>
-                        </div>
-
-                        <!-- 預期脫水量 Slider -->
-                        <div>
-                            <div class="flex justify-between items-end mb-1">
-                                <label class="text-sm font-medium text-slate-700">單次預期脫水量 (Target UF)</label>
-                                <span class="text-lg font-bold text-[#0284c7]"><span id="valUf">2.5</span> L</span>
-                            </div>
-                            <input type="range" id="ufVolume" min="0.5" max="5.0" step="0.1" value="2.5" oninput="updateSliderTrack(this); triggerCalculation();">
-                            <p class="text-[11px] text-slate-400 mt-1.5">透析頻率愈高，每日體液蓄積量通常愈小 (常態約 1.0~2.0L)。</p>
-                        </div>
-
-                        <!-- 殘餘尿量 RKF (按鈕群組) -->
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2.5">殘餘尿量 (RKF 評估)</label>
-                            <div class="grid grid-cols-3 gap-3">
-                                <button id="rkf-high" onclick="selectRkf(this, 600)" class="rkf-btn py-2.5 px-2 rounded-xl border border-slate-200 bg-white hover:border-[#0284c7] transition-colors text-center flex flex-col items-center justify-center gap-0.5 shadow-sm">
-                                    <span class="text-xs font-semibold text-slate-700">> 500 mL/日</span>
-                                    <span class="text-[10px] text-emerald-600">保護殘存功能</span>
-                                </button>
-                                <button id="rkf-med" onclick="selectRkf(this, 300)" class="rkf-btn active py-2.5 px-2 rounded-xl border-2 border-[#0284c7] bg-sky-50 text-center flex flex-col items-center justify-center gap-0.5 shadow-sm">
-                                    <span class="text-xs font-semibold text-[#0369a1]">100 ~ 500 mL</span>
-                                    <span class="text-[10px] text-amber-600">輕微殘存</span>
-                                </button>
-                                <button id="rkf-low" onclick="selectRkf(this, 0)" class="rkf-btn py-2.5 px-2 rounded-xl border border-slate-200 bg-white hover:border-[#0284c7] transition-colors text-center flex flex-col items-center justify-center gap-0.5 shadow-sm">
-                                    <span class="text-xs font-semibold text-slate-700">< 100 mL/日</span>
-                                    <span class="text-[10px] text-red-500">無尿期 Anuric</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 生化指標 (Cr, Phos, K) -->
-                        <div class="grid grid-cols-3 gap-4 pt-2">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1.5">目前肌酸酐 (Cr)</label>
-                                <div class="relative">
-                                    <input type="number" id="cr" value="10.5" step="0.1" oninput="triggerCalculation()" class="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-8 text-sm focus:border-[#0284c7] focus:ring-1 focus:ring-[#0284c7] transition-shadow bg-slate-50 focus:bg-white">
-                                    <span class="absolute right-2 top-2.5 text-[10px] text-slate-400">mg/dL</span>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1.5">血磷 (Phosphate)</label>
-                                <div class="relative">
-                                    <input type="number" id="phos" value="5.8" step="0.1" oninput="triggerCalculation()" class="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-8 text-sm focus:border-[#0284c7] focus:ring-1 focus:ring-[#0284c7] transition-shadow bg-slate-50 focus:bg-white">
-                                    <span class="absolute right-2 top-2.5 text-[10px] text-slate-400">mg/dL</span>
-                                </div>
-                                <p class="text-[10px] text-slate-400 mt-1">目標: 3.5 - 5.5</p>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1.5">血鉀 (Potassium)</label>
-                                <div class="relative">
-                                    <input type="number" id="k" value="4.8" step="0.1" oninput="triggerCalculation()" class="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-8 text-sm focus:border-[#0284c7] focus:ring-1 focus:ring-[#0284c7] transition-shadow bg-slate-50 focus:bg-white">
-                                    <span class="absolute right-2 top-2.5 text-[10px] text-slate-400">mEq/L</span>
-                                </div>
-                                <p class="text-[10px] text-slate-400 mt-1">目標: 3.5 - 5.0</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 卡片：通路安全與生活型態 (簡化示意) -->
-                <div class="bg-white rounded-2xl p-6 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)] border border-slate-100 opacity-80 hover:opacity-100 transition-opacity">
-                    <h2 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <i data-lucide="shield-check" class="w-5 h-5 text-[#0284c7]"></i>
-                        通路安全與生活型態
-                    </h2>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5">血管通路類型 (Vascular Access)</label>
-                        <select id="access" onchange="triggerCalculation()" class="w-full rounded-lg border border-slate-200 py-2 px-3 text-sm focus:border-[#0284c7] focus:ring-1 focus:ring-[#0284c7] bg-white text-slate-700">
-                            <option value="avf">自體動靜脈瘻管 (AVF) - 成熟良好</option>
-                            <option value="avg">人工血管 (AVG)</option>
-                            <option value="permcath">長期雙腔穿刺導管 (Permcath)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 右欄：結果與決策區 -->
-            <div class="lg:col-span-7 space-y-6">
-                <!-- 處方推薦主卡片 -->
-                <div id="resultCard" class="bg-white rounded-2xl p-7 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.08)] border-2 border-indigo-100 transition-colors duration-300 relative overflow-hidden">
-                    
-                    <!-- 頂部標籤與狀態 -->
-                    <div class="flex justify-between items-start mb-5">
-                        <span id="modeBadge" class="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full tracking-wide">
-                            首選推薦：夜間長時居家透析 (NHHD)
-                        </span>
-                        <div class="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-                            <i data-lucide="cpu" class="w-3.5 h-3.5 text-slate-400"></i>
-                            演算法臨床適應度比對完成
-                        </div>
-                    </div>
-
-                    <!-- 標題與說明 -->
-                    <h3 id="modeTitle" class="text-2xl font-bold text-slate-900 mb-3 tracking-tight">
-                        夜間長時居家血液透析 (Nocturnal HHD)
-                    </h3>
-                    <p id="modeRationale" class="text-sm text-slate-600 leading-relaxed mb-6 h-10">
-                        患者目標脫水量為 2.5L，長達 7 小時之睡眠透析能將溶質緩慢移轉，深層清除高分子毒素與血磷...
-                    </p>
-
-                    <!-- 動態優化提示框 (預設隱藏) -->
-                    <div id="optimizationAlert" class="hidden mb-6 bg-sky-50 border border-sky-200 rounded-xl p-3.5 flex items-start gap-3">
-                        <i data-lucide="sparkles" class="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5"></i>
-                        <div class="text-sm text-sky-900">
-                            <span class="font-bold block mb-0.5">處方自動升級機制已啟動</span>
-                            <span id="optAlertText">因基準處方無法達標，系統已自動延長時間以滿足 stdKt/V ≥ 2.3 的 FHN 指引標準。</span>
-                        </div>
-                    </div>
-
-                    <!-- 處方參數網格 -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                        <div class="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
-                            <div class="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
-                                <i data-lucide="calendar" class="w-3.5 h-3.5 text-[#0284c7]"></i> 每週頻率
-                            </div>
-                            <div id="resFreq" class="text-lg font-bold text-slate-800 leading-tight">3~4 晚/週</div>
-                            <div class="text-[10px] text-slate-400 mt-1">隔日或週一三五</div>
-                        </div>
-                        <div class="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
-                            <div class="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
-                                <i data-lucide="clock" class="w-3.5 h-3.5 text-[#0284c7]"></i> 單次時間
-                            </div>
-                            <div id="resTime" class="text-lg font-bold text-slate-800 leading-tight">7.0 小時</div>
-                            <div class="text-[10px] text-slate-400 mt-1">於夜間睡眠進行</div>
-                        </div>
-                        <div class="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
-                            <div class="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
-                                <i data-lucide="droplet" class="w-3.5 h-3.5 text-rose-500"></i> 血流速 Qb
-                            </div>
-                            <div id="resQb" class="text-lg font-bold text-slate-800 leading-tight">250 mL/min</div>
-                            <div class="text-[10px] text-slate-400 mt-1">夜間安全限制</div>
-                        </div>
-                        <div class="bg-slate-50/80 rounded-xl p-4 border border-slate-100">
-                            <div class="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 mb-1.5">
-                                <i data-lucide="gauge" class="w-3.5 h-3.5 text-emerald-500"></i> 透析液 Qd
-                            </div>
-                            <div id="resQd" class="text-lg font-bold text-slate-800 leading-tight">200 mL/min</div>
-                            <div class="text-[10px] text-slate-400 mt-1">低流速設定</div>
-                        </div>
-                    </div>
-
-                    <!-- UFR 安全監測 -->
-                    <div class="mb-7">
-                        <div class="flex justify-between items-end mb-2">
-                            <span class="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                <i data-lucide="heart-pulse" class="w-4 h-4 text-[#0284c7]"></i>
-                                超濾率安全監測 (Ultrafiltration Rate, UFR)
-                            </span>
-                            <div class="text-right">
-                                <span id="ufrValue" class="text-xl font-bold font-mono text-slate-800">5.49</span>
-                                <span class="text-xs text-slate-500 font-medium">mL/kg/hr</span>
-                            </div>
-                        </div>
-                        
-                        <!-- 漸層進度條背景 -->
-                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2 relative">
-                            <!-- 實際進度 -->
-                            <div id="ufrBar" class="h-full bg-emerald-500 rounded-full progress-bar-transition" style="width: 45%;"></div>
-                        </div>
-                        
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span id="ufrStatus" class="text-xs font-bold text-emerald-600 block">超濾安全標準 (< 10 mL/kg/hr)</span>
-                                <span id="ufrAdvice" class="text-[11px] text-slate-500 mt-0.5 block">超濾速率低且平穩，能預防透析中低血壓與心肌缺血頓抑。</span>
-                            </div>
-                            <span class="text-[10px] text-slate-400 mt-0.5 text-right flex-shrink-0">
-                                警示臨界: 10.0 | 高危險臨界: 13.0
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- 動力學與 StdKt/V -->
-                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-100 mb-6 flex flex-wrap justify-between items-center gap-4">
-                        <div>
-                            <div class="text-xs text-slate-500 mb-1">單次 spKt/V 估算</div>
-                            <div id="resSpKtV" class="text-lg font-bold text-slate-700">1.85</div>
-                        </div>
-                        <div class="h-10 w-px bg-slate-200 hidden sm:block"></div>
-                        <div>
-                            <div class="text-xs text-slate-500 mb-1">預期每週總 Kt/V</div>
-                            <div id="resWeeklyKtV" class="text-lg font-bold text-slate-700">7.40</div>
-                        </div>
-                        <div class="h-10 w-px bg-slate-200 hidden sm:block"></div>
-                        <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-100">
-                            <div class="text-xs font-bold text-[#0284c7] mb-1 flex items-center gap-1.5">
-                                <i data-lucide="target" class="w-3.5 h-3.5"></i>
-                                標準化 stdKt/V (目標 ≥ 2.3)
-                            </div>
-                            <div id="resStdKtV" class="text-xl font-black text-slate-800">2.84</div>
-                        </div>
-                    </div>
-
-                    <!-- 底部安全提示 -->
-                    <div id="safetyWarning" class="bg-slate-50 rounded-xl p-3.5 border border-slate-100 flex items-start gap-3 text-xs text-slate-600">
-                        <i data-lucide="shield-alert" class="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"></i>
-                        <span>夜間無人監看透析必備：穿刺點須配戴「漏血感應警報貼片 (Wetness Detector)」，且血流速 Qb 嚴格上限 ≤ 250 mL/min。</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- 成功提示 Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 transform transition-all duration-300 translate-y-20 opacity-0 bg-slate-800 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 z-50">
-        <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
-        <span class="text-sm font-medium">處方摘要已複製！</span>
-    </div>
-
-    <script>
-        // 初始化 Lucide 圖標
-        lucide.createIcons();
-
-        // 狀態變數
-        let rkfValue = 300; // 預設 100~500 mL
-
-        // 初始化軌道顏色
-        document.addEventListener('DOMContentLoaded', () => {
-            updateSliderTrack(document.getElementById('dryWt'));
-            updateSliderTrack(document.getElementById('ufVolume'));
-            triggerCalculation();
-        });
-
-        // 處理 Slider 軌道顏色
-        function updateSliderTrack(el) {
-            const min = el.min || 0;
-            const max = el.max || 100;
-            const val = el.value;
-            const percentage = ((val - min) / (max - min)) * 100;
-            el.style.background = `linear-gradient(to right, #0284c7 ${percentage}%, #e2e8f0 ${percentage}%)`;
-            
-            // 更新上方標籤
-            if(el.id === 'dryWt') document.getElementById('valDryWt').innerText = parseFloat(val).toFixed(1);
-            if(el.id === 'ufVolume') document.getElementById('valUf').innerText = parseFloat(val).toFixed(1);
-        }
-
-        // RKF 選取邏輯
-        function selectRkf(element, value) {
-            document.querySelectorAll('.rkf-btn').forEach(btn => {
-                btn.classList.remove('active', 'border-[#0284c7]', 'border-2', 'bg-sky-50');
-                btn.classList.add('border-slate-200', 'bg-white');
-                btn.querySelector('span:first-child').classList.replace('text-[#0369a1]', 'text-slate-700');
-            });
-            
-            element.classList.remove('border-slate-200', 'bg-white');
-            element.classList.add('active', 'border-[#0284c7]', 'border-2', 'bg-sky-50');
-            element.querySelector('span:first-child').classList.replace('text-slate-700', 'text-[#0369a1]');
-            
-            rkfValue = value;
-            triggerCalculation();
-        }
-
-        // 動力學引擎 (stdKt/V 演算法)
-        function calculateKinetics(estK_mL_min, hours, freq, volume_V_mL) {
-            const time_mins = hours * 60;
-            const spKtV = (estK_mL_min * time_mins) / volume_V_mL;
-            // Daugirdas eKt/V (Equilibrated)
-            const eKtV = spKtV - (0.6 * (spKtV / hours)) + 0.03;
-            // Leypoldt stdKt/V (Standardized)
-            const stdKtV = (168 * (1 - Math.exp(-eKtV))) / (hours + (168 / (freq * (eKtV / hours))));
-            return { spKtV, stdKtV };
-        }
-
-        // 核心計算邏輯
-        function triggerCalculation() {
-            // 讀取輸入值
-            const dryWt = parseFloat(document.getElementById('dryWt').value);
-            const ufVolume_L = parseFloat(document.getElementById('ufVolume').value);
-            const currentWt = dryWt + ufVolume_L; // 推算現在體重
-            
-            const cr = parseFloat(document.getElementById('cr').value) || 0;
-            const phos = parseFloat(document.getElementById('phos').value) || 0;
-            const access = document.getElementById('access').value;
-
-            // 計算基礎體積
-            const volume_V_L = dryWt * 0.55; // Watson 簡化版
-            const volume_V_mL = volume_V_L * 1000;
-
-            let mode, freq, hours, qb, qd, estK;
-            let isOptimized = false;
-
-            // 1. 決定基礎模式 (Base Decision)
-            // 高毒素、無尿、高血磷或需大量脫水，優先推薦 NHHD
-            if (phos >= 6.0 || ufVolume_L >= 3.0 || (cr >= 10.0 && rkfValue < 100)) {
-                mode = "NHHD";
-                freq = 4;
-                hours = 7.0;
-                qb = (access === 'permcath') ? 200 : 250; 
-                qd = 200;
-                estK = (qb === 200) ? 140 : 155; 
-            } else {
-                mode = "SDHHD";
-                freq = 5;
-                hours = 2.5;
-                qb = (access === 'permcath') ? 300 : 350;
-                qd = 400;
-                estK = (qb === 300) ? 190 : 230;
-            }
-
-            // 2. 動態處方優化 (Auto-escalation to reach stdKt/V >= 2.3)
-            let kinetics = calculateKinetics(estK, hours, freq, volume_V_mL);
-            
-            if (kinetics.stdKtV < 2.3) {
-                isOptimized = true;
-                if (mode === "SDHHD") {
-                    // 短時間透析：延長時間至 3.5h，再增加天數至 6 天
-                    while (kinetics.stdKtV < 2.3 && (hours < 3.5 || freq < 6)) {
-                        if (hours < 3.5) hours += 0.5;
-                        else if (freq < 6) freq += 1;
-                        kinetics = calculateKinetics(estK, hours, freq, volume_V_mL);
-                    }
-                } else {
-                    // 夜間透析：增加天數至 5 晚，再延長時間至 8h
-                    while (kinetics.stdKtV < 2.3 && (freq < 5 || hours < 8)) {
-                        if (freq < 5) freq += 1;
-                        else if (hours < 8) hours += 0.5;
-                        kinetics = calculateKinetics(estK, hours, freq, volume_V_mL);
-                    }
-                }
-            }
-
-            // 3. 計算超濾率 UFR (mL/kg/hr)
-            // UFR = (UF_L * 1000) / (DryWt * Hours)
-            const ufr = (ufVolume_L * 1000) / (dryWt * hours);
-
-            // 4. 更新 UI - 模式外觀
-            const resultCard = document.getElementById('resultCard');
-            const modeBadge = document.getElementById('modeBadge');
-            const modeTitle = document.getElementById('modeTitle');
-            const modeRationale = document.getElementById('modeRationale');
-            const safetyWarning = document.getElementById('safetyWarning');
-
-            if (mode === "NHHD") {
-                resultCard.className = "bg-white rounded-2xl p-7 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.08)] border-2 border-indigo-100 transition-colors duration-300 relative overflow-hidden";
-                modeBadge.className = "inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full tracking-wide";
-                modeBadge.innerText = "首選推薦：夜間長時居家透析 (NHHD)";
-                modeTitle.innerText = "夜間長時居家血液透析 (Nocturnal HHD)";
-                modeRationale.innerText = `患者目標脫水量為 ${ufVolume_L.toFixed(1)}L，長達 ${hours} 小時之睡眠透析能將溶質緩慢移轉，深層清除高分子毒素與血磷（當前磷 ${phos} mg/dL），心血管耐受性極佳。`;
-                safetyWarning.innerHTML = `<i data-lucide="shield-alert" class="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"></i><span>夜間無人監看透析必備：穿刺點須配戴「漏血感應警報貼片 (Wetness Detector)」，且血流速 Qb 嚴格上限 ≤ 250 mL/min。</span>`;
-            } else {
-                resultCard.className = "bg-white rounded-2xl p-7 shadow-[0_4px_20px_-5px_rgba(0,0,0,0.08)] border-2 border-sky-100 transition-colors duration-300 relative overflow-hidden";
-                modeBadge.className = "inline-block px-3 py-1 bg-sky-100 text-[#0284c7] text-xs font-bold rounded-full tracking-wide";
-                modeBadge.innerText = "首選推薦：短時間每日透析 (SDHHD)";
-                modeTitle.innerText = "短時間每日居家血液透析 (Short Daily HHD)";
-                modeRationale.innerText = `單次脫水負擔與血磷尚可，配合每週高頻率進行 ${hours} 小時透析，適合日程緊湊、工作彈性要求高之生活型態。`;
-                safetyWarning.innerHTML = `<i data-lucide="info" class="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"></i><span>短時間透析需較高血流速，請確保血管通路狀況良好，並注意透析中血壓變化。</span>`;
-            }
-
-            // 更新網格數據
-            document.getElementById('resFreq').innerText = `${freq} 晚/週`.replace('晚', mode==='NHHD'?'晚':'次');
-            document.getElementById('resTime').innerText = `${hours.toFixed(1)} 小時`;
-            document.getElementById('resQb').innerText = `${qb} mL/min`;
-            document.getElementById('resQd').innerText = `${qd} mL/min`;
-
-            // 更新 UFR UI
-            const ufrValue = document.getElementById('ufrValue');
-            const ufrBar = document.getElementById('ufrBar');
-            const ufrStatus = document.getElementById('ufrStatus');
-            const ufrAdvice = document.getElementById('ufrAdvice');
-
-            ufrValue.innerText = ufr.toFixed(2);
-            // 限制進度條最大 100%
-            const barWidth = Math.min((ufr / 15) * 100, 100);
-            ufrBar.style.width = `${barWidth}%`;
-
-            if (ufr < 10) {
-                ufrValue.className = "text-xl font-bold font-mono text-emerald-600";
-                ufrBar.className = "h-full bg-emerald-500 rounded-full progress-bar-transition";
-                ufrStatus.className = "text-xs font-bold text-emerald-600 block";
-                ufrStatus.innerText = "超濾安全標準 (< 10 mL/kg/hr)";
-                ufrAdvice.innerText = "超濾速率低且平穩，能預防透析中低血壓與心肌缺血頓抑。";
-            } else if (ufr <= 13) {
-                ufrValue.className = "text-xl font-bold font-mono text-amber-600";
-                ufrBar.className = "h-full bg-amber-500 rounded-full progress-bar-transition";
-                ufrStatus.className = "text-xs font-bold text-amber-600 block";
-                ufrStatus.innerText = "臨界監測區 (10 ~ 13 mL/kg/hr)";
-                ufrAdvice.innerText = "尚可接受，但請密切注意血壓。若有抽筋現象請進一步延長時數。";
-            } else {
-                ufrValue.className = "text-xl font-bold font-mono text-rose-600";
-                ufrBar.className = "h-full bg-rose-500 rounded-full progress-bar-transition";
-                ufrStatus.className = "text-xs font-bold text-rose-600 block";
-                ufrStatus.innerText = "高危險區域 (> 13 mL/kg/hr)";
-                ufrAdvice.innerText = "警告：脫水過快！極度容易誘發心血管併發症，強烈建議拉長時間。";
-            }
-
-            // 更新動力學數據
-            document.getElementById('resSpKtV').innerText = kinetics.spKtV.toFixed(2);
-            document.getElementById('resWeeklyKtV').innerText = (kinetics.spKtV * freq).toFixed(2);
-            
-            const stdKtvEl = document.getElementById('resStdKtV');
-            stdKtvEl.innerText = kinetics.stdKtV.toFixed(2);
-            
-            // 優化提示框
-            const optAlert = document.getElementById('optimizationAlert');
-            if (isOptimized) {
-                optAlert.classList.remove('hidden');
-                stdKtvEl.className = "text-xl font-black text-sky-600";
-                
-                if (kinetics.stdKtV < 2.3) {
-                    // 已達極限仍未標
-                    document.getElementById('optAlertText').innerText = "已將處方推至系統上限，但因體型或通路限制，stdKt/V 仍未達 2.3，請考慮重新建立更高流速之血管通路。";
-                    stdKtvEl.className = "text-xl font-black text-amber-600";
-                } else {
-                    document.getElementById('optAlertText').innerText = `因基準處方無法達標，系統已自動延長時間 (至 ${hours}h) 或增加頻率 (至 ${freq}次) 以滿足 stdKt/V ≥ 2.3 指引標準。`;
-                }
-            } else {
-                optAlert.classList.add('hidden');
-                stdKtvEl.className = "text-xl font-black text-slate-800";
-            }
-
-            // 重新渲染圖標
-            lucide.createIcons();
-        }
-
-        // 重設參數
-        function resetParams() {
-            const dryWtInput = document.getElementById('dryWt');
-            const ufVolumeInput = document.getElementById('ufVolume');
-            
-            dryWtInput.value = 65;
-            ufVolumeInput.value = 2.5;
-            document.getElementById('cr').value = 10.5;
-            document.getElementById('phos').value = 5.8;
-            document.getElementById('k').value = 4.8;
-            document.getElementById('access').value = 'avf';
-            
-            selectRkf(document.getElementById('rkf-med'), 300);
-            updateSliderTrack(dryWtInput);
-            updateSliderTrack(ufVolumeInput);
-            triggerCalculation();
-        }
-
-        // 複製摘要
-        function copySummary() {
-            const text = `【HHD 處方決策與 stdKt/V 分析】\n` +
-                         `乾體重: ${document.getElementById('dryWt').value} kg | 單次 UF: ${document.getElementById('ufVolume').value} L\n` +
-                         `Cr: ${document.getElementById('cr').value} | Phos: ${document.getElementById('phos').value}\n` +
-                         `------------------------\n` +
-                         `推薦模式: ${document.getElementById('modeTitle').innerText}\n` +
-                         `處方設定: ${document.getElementById('resFreq').innerText}，每次 ${document.getElementById('resTime').innerText}\n` +
-                         `Qb: ${document.getElementById('resQb').innerText} | Qd: ${document.getElementById('resQd').innerText}\n` +
-                         `UFR: ${document.getElementById('ufrValue').innerText} mL/kg/hr\n` +
-                         `預期 stdKt/V: ${document.getElementById('resStdKtV').innerText}`;
-            
-            const el = document.createElement('textarea');
-            el.value = text;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            
-            const toast = document.getElementById('toast');
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => {
-                toast.classList.add('translate-y-20', 'opacity-0');
-            }, 2500);
-        }
-    </script>
-</body>
-</html>
-```
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>居家血液透析｜適合度與處方決策</title><style>
+:root{--ink:#163049;--muted:#607386;--blue:#096b83;--line:#dbe5ec;--bg:#f1f6f8;--good:#11674c;--warn:#905700;--bad:#ac3434}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 system-ui,-apple-system,"Noto Sans TC",sans-serif}header{background:#123447;color:white;padding:28px max(20px,calc((100vw - 1320px)/2));}header p{color:#c7dde5;margin:6px 0}h1{font-size:26px;margin:0}h2{font-size:19px;margin:0 0 14px}h3{font-size:17px;margin:12px 0}a{color:var(--blue)}main{max-width:1320px;margin:auto;padding:24px;display:grid;grid-template-columns:440px 1fr;gap:22px}.card{background:white;padding:22px;border:1px solid var(--line);border-radius:16px;margin-bottom:18px;box-shadow:0 4px 18px #16304906}.step{color:var(--blue);font-size:12px;font-weight:750;letter-spacing:1px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{margin:0 0 12px}label{display:block;font-size:13px;font-weight:650;margin-bottom:5px}input,select{width:100%;font:inherit;color:var(--ink);border:1px solid #bacbd6;border-radius:8px;padding:9px;background:white}input:focus,select:focus{outline:2px solid #55b6c5;outline-offset:1px}small,.note{display:block;color:var(--muted);font-size:12px}.note{margin:8px 0}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}button{cursor:pointer;border:1px solid #b7cbd4;background:white;color:var(--ink);border-radius:8px;padding:9px 13px;font:600 13px system-ui}button.primary{background:var(--blue);color:white;border-color:var(--blue)}.banner{border-left:4px solid var(--blue);background:#eef8fa;padding:14px;border-radius:8px;margin:12px 0}.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.banner.bad{background:#fff0ef;border-color:var(--bad)}.banner.warn{background:#fff7e8;border-color:var(--warn)}.banner.good{background:#edf8f2;border-color:var(--good)}.pill{display:inline-block;padding:3px 9px;border-radius:20px;background:#eef3f6;font-size:12px;font-weight:700}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0}.metric{background:#f3f7f9;padding:12px;border-radius:9px}.metric strong{font-size:23px;display:block}.metric span{font-size:12px;color:var(--muted)}ul{padding-left:20px;margin:8px 0}li{margin:5px 0}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#f0f5f7;font-size:12px}tr.selected{background:#edf8f8}.mode{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}details{margin-top:12px}summary{cursor:pointer;font-weight:650}.empty{padding:28px;background:#f5f8fa;border-radius:10px;color:var(--muted)}.status-line{margin-top:7px;font-size:13px}.tag{color:#b8e0e7;font-size:12px}.full{grid-column:1/-1}.toast{position:fixed;bottom:20px;right:20px;background:#123447;color:white;padding:12px 18px;border-radius:10px;display:none}footer{max-width:1320px;margin:auto;padding:0 24px 30px;color:var(--muted);font-size:12px}@media(max-width:950px){main{grid-template-columns:1fr}header{padding:22px}main{padding:16px}}@media(max-width:500px){.grid,.metrics{grid-template-columns:1fr}.card{padding:17px}h1{font-size:22px}}@media print{header{background:white;color:black;padding:0}header p{color:black}.inputs,.actions,footer,.toast{display:none}main{display:block;padding:0}.card{break-inside:avoid;box-shadow:none;border-radius:0}.table-wrap{overflow:visible}body{background:white;font-size:11px}details{display:none}}
+</style></head><body><header><div class="tag">中國醫藥大學北港院區 · 腎臟科　｜　v2.0 · 2026-10-02</div><h1>居家血液透析：適合度與個人化處方</h1><p>先評估安全與生活條件，再比較模式、預估 StdKt/V，提出可執行的改善方案。</p><div class="actions"><button id="demo">載入示範個案</button><button id="reset">清空資料</button><button id="copy">複製評估摘要</button><button id="print">列印／另存 PDF</button></div></header><main><section class="inputs">
+<form id="form" novalidate>
+<div class="card"><div class="step">01 · 生理條件</div><h2>體位、體液與臨床狀況</h2><div class="grid" id="physical"></div><div class="note">Cr／eGFR 不用來直接推定透析足量或居家適合度；是否開始透析須另依症狀與臨床狀況評估。</div></div>
+<div class="card"><div class="step">02 · 居家可行性</div><h2>能力、支持與環境</h2><div id="social"></div><div class="note">未確認的項目保持「待評估」。年齡、導管或沒有家屬本身不直接排除居家透析；需確認實際支援與院方計畫。</div></div>
+<div class="card"><div class="step">03 · 可執行處方</div><h2>時段與設備清除率</h2><div class="grid" id="limits"></div><p class="note">K 是實際／預期有效尿素清除率，不是 Qb 或 Qd。請依院內機型、透析器、Qb、Qd、通路與既有治療量測輸入。系統不以通路類型自行指定流速。</p><div id="clearances"></div></div>
+<div class="card"><div class="step">04 · 尿素動力學</div><h2>殘腎清除與校正資料</h2><div class="grid" id="kinetic"></div><details><summary>用定時尿液計算 Kru</summary><div class="grid" id="urinefields"></div><button type="button" id="calcKru">計算並填入 Kru</button><div id="urineResult" class="note"></div><p class="note">Kru = 尿液尿素氮／平均血中尿素氮 × 尿量／收集分鐘數。兩者須同為尿素氮且單位相同；跨透析期請由醫師確認平均血中濃度與完整收集。不是用單次 Cr 或尿量換算。</p></details></div>
+</form></section><section class="outputs" aria-live="polite"><div class="card"><div class="step">A · 適合度</div><h2>是否可進入居家透析計畫？</h2><div id="eligibility"></div></div><div class="card"><div class="step">B · 模式與處方</div><h2>可執行的模式比較</h2><div id="recommendation"></div><div id="comparison"></div></div><div class="card"><div class="step">C · 改善方案</div><h2>足量、體液與居家條件的下一步</h2><div id="improvements"></div></div><div class="card"><h2>計算方式與判讀範圍</h2><p class="note">本系統提供維持性成人血液透析的規劃估算，最終由腎臟科與居家透析團隊確認。StdKt/V 達標仍需評估症狀、血壓、體液、鉀、磷、營養、通路與生活品質。</p><details><summary>查看公式、假設與來源</summary><p>V 優先使用量測／動力學建模值；否則使用 Watson 體位估算：男性 2.447 − 0.09156×年齡 + 0.1074×身高 + 0.3362×體重；女性 −2.097 + 0.1069×身高 + 0.2466×體重（L）。肥胖、水腫與特殊體型可能有較大誤差。</p><p>規劃 spKt/V = K×t／V；eKt/V = spKt/V×t／(t+30)。t 為分鐘，K 為 mL/min，V 為 mL。這是規劃模型，並非從透析前後 BUN 量測的 delivered spKt/V。</p><p>S = [10080×(1−exp(−eKt/V))／t] ÷ [(1−exp(−eKt/V))／eKt/V + 10080／(N×t) − 1]。</p><p>UF 校正後透析 StdKt/V = S／[1−(0.74／N)×(每週 UF／V)]；總 StdKt/V = 校正後透析 StdKt/V + Kru×10080／V。每週 UF 與 V 均使用 mL，Kru 使用未按體表面積標準化的 mL/min。依 NKF 教學所列簡化方法；不規則排程需正式尿素動力學建模。</p><p>非每週三次療程：總 StdKt/V 目標 ≥2.3，最低實際輸送量 ≥2.1。每週三次且不計／無殘腎者，另以單次 spKt/V 目標 ≥1.4、最低 ≥1.2 評估；有量測殘腎者可個別調整。估算不能宣稱實測達標。</p><p>UFR 以每週淨 UF／次數計算平均值；尖峰值以每週淨 UF×最長間隔／168 小時估算，或採手動輸入的最大單次 UF。預設 3 次/週最長間隔 72h、4–6 次 48h、7 次 24h。這是體液均勻累積的保守近似；實際排程、攝水與尿量需另核對。增加次數後每次 UF 隨之重算，不能固定原單次 UF。</p><p>UFR 10 與 13 mL/kg/h 為風險提示，非人人適用的安全保證；醫師可設定個別規劃上限。K±20% 的範圍只作敏感度分析，不是信賴區間。夜間與獨立操作須符合院方核准流程；沒有通用 Qb≤250 的絕對規則。</p><p>模式排序為透明的規劃規則，尚未經臨床驗證為適合度評分。優先可執行、足量與 UFR；再依偏好、反覆低血壓、體液負擔及高磷調整排序。</p><ul><li><a href="https://www.kidney.org/sites/default/files/KDOQI-HD-update-NRAA-2016%5B1%5D.pdf" target="_blank" rel="noopener">NKF：KDOQI 2015 血液透析足量（含公式與目標）</a></li><li><a href="https://pubmed.ncbi.nlm.nih.gov/20107428/" target="_blank" rel="noopener">Daugirdas et al. 2010：StdKt/V、UF 與殘腎清除</a></li><li><a href="https://www.ishd.org/home-hd-toolkit/" target="_blank" rel="noopener">ISHD：Home HD Toolkit</a></li></ul></details></div></section></main><footer>所有個案資料僅在此頁面記憶體處理，不上傳、不自動儲存。複製與列印由使用者自行執行；頁面重新載入即清空。版本：HHD-2.0.0</footer><div id="toast" class="toast" role="status"></div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function field(container,id,label,type='number',options=null,extra='') {const d=document.createElement('div');d.className='field';d.innerHTML=`<label for="${id}">${label}</label>`+(type==='select'?`<select id="${id}">${options.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select>`:`<input id="${id}" type="number" step="any" ${extra}>`);$(container).append(d);}
+const unknown=[['','待評估'],['yes','已確認／具備'],['no','未具備／待改善']];
+field('physical','sex','生理性別（Watson）','select',[['','請選擇'],['male','男性'],['female','女性']]);
+for(const [id,l] of [['age','年齡（歲）'],['height','身高（cm）'],['weight','乾體重（kg）'],['weeklyUF','每週淨 UF（L）'],['peakUF','最大單次 UF（L，選填）'],['potassium','血鉀（mmol/L）'],['phosphate','血磷（mg/dL）'],['sbp','透析前收縮壓（mmHg）']])field('physical',id,l);
+field('physical','stable','目前臨床穩定性','select',[['','待評估'],['yes','穩定、無急性警訊'],['no','急性不穩／須院內處理']]);
+field('physical','hypotension','反覆透析低血壓','select',[['','待評估'],['yes','有'],['no','無']]);
+field('physical','overload','反覆體液過多／心衰竭','select',[['','待評估'],['yes','有（目前穩定）'],['no','無']]);
+field('physical','access','通路狀況','select',[['','待評估'],['avf','成熟 AVF、功能穩定'],['avg','功能穩定 AVG'],['catheter','功能穩定隧道式導管'],['unsafe','感染／不穩／功能不足']]);
+const socialFields=[['willing','病人知情意願'],['training','訓練與學習能力（本人或操作照顧者）'],['cognition','理解、記憶與警報處理（含協助）'],['dexterity','視力、手部操作與無菌技術（含協助）'],['cannulation','穿刺／導管操作能力（含協助）'],['adherence','治療、紀錄與回診配合'],['support','操作支持計畫'],['space','清潔空間、耗材儲存與住宅同意'],['utilities','符合機型的水電／排水與設備環境'],['emergency','電話、緊急應變與送醫路徑'],['backup','院方追蹤、支援與備援透析'],['finance','費用／給付與照顧負擔可承受']];
+for(const [id,l] of socialFields)field('social',id,l,'select',id==='support'?[['','待評估'],['yes','有受訓照顧者／協助式計畫'],['solo','院方核准獨立操作與救援計畫'],['no','支持計畫尚未建立']]:unknown);
+field('limits','dayAvailable','日間時段可用','select',unknown);field('limits','nightAvailable','夜間時段可用','select',unknown);field('limits','nightSafety','夜間漏血警報、固定與救援計畫','select',unknown);
+for(const [id,l] of [['maxDays','每週最多治療次數（3–7）'],['maxDayHours','日間單次最多小時（2–8）'],['maxNightHours','夜間單次最多小時（6–8）'],['ufrGoal','個別 UFR 規劃上限（mL/kg/h）']])field('limits',id,l);
+field('limits','preference','病人偏好','select',[['any','無特定偏好'],['standard','傳統居家'],['short','短每日'],['long','長時日間'],['night','夜間長時']]);
+const modes=[{id:'standard',name:'傳統居家',n:3,t:4,minT:3,maxT:5,minN:3,maxN:4},{id:'short',name:'短每日',n:5,t:2.5,minT:2,maxT:4,minN:5,maxN:7},{id:'long',name:'長時日間',n:3,t:6,minT:5,maxT:8,minN:3,maxN:5},{id:'night',name:'夜間長時',n:4,t:7,minT:6,maxT:8,minN:3,maxN:6}];
+for(const m of modes)field('clearances','k_'+m.id,m.name+'：有效尿素清除率 K（mL/min）');
+field('kinetic','measuredV','量測／建模 V（L，選填）');field('kinetic','rkf','殘腎資料','select',[['','未量測／不明（不計入）'],['none','確認無殘腎尿素清除（Kru=0）'],['measured','已量測 Kru']]);field('kinetic','kru','未標準化 Kru（mL/min）');
+for(const [id,l] of [['urineVolume','收集尿量（mL）'],['urineHours','收集時間（小時）'],['urineBUN','尿液尿素氮（mg/dL）'],['meanBUN','平均血中尿素氮（mg/dL）']])field('urinefields',id,l);
+const num=id=>$(id).value.trim()===''?null:Number($(id).value);
+const val=id=>$(id).value;
+function kinetics(K,t,n,V,UF,kru){const minutes=t*60,Vm=V*1000,sp=K*minutes/Vm,e=sp*minutes/(minutes+30),a=-Math.expm1(-e),S=(10080*a/minutes)/(a/e+10080/(n*minutes)-1),den=1-(.74/n)*UF*1000/Vm; if(!(den>0&&Number.isFinite(S)))return null;return {sp,e,S,dialysis:S/den,renal:kru*10080/Vm,total:S/den+kru*10080/Vm};}
+function watson(sex,age,height,weight){return sex==='male'?2.447-.09156*age+.1074*height+.3362*weight:-2.097+.1069*height+.2466*weight;}
+function gap(n){return n===3?72:n===7?24:48;}
+function adequacy(k,n,rkf){if(n===3&&!(rkf==='measured'&&num('kru')>0))return {target:k.sp>=1.4,min:k.sp>=1.2,text:k.sp>=1.4?'單次 spKt/V 預估達目標':k.sp>=1.2?'單次達最低、未達目標':'單次低於最低',basis:'每週三次：單次 spKt/V 目標 1.4／最低 1.2'};return {target:k.total>=2.3,min:k.total>=2.1,text:k.total>=2.3?'StdKt/V 預估達目標':k.total>=2.1?'達最低、未達目標':'低於最低',basis:'StdKt/V 目標 2.3／最低 2.1'};}
+let summaryText='';
+function render(){const missing=[],barriers=[],urgent=[],notes=[],invalid=[];for(const [id,l] of [['stable','臨床穩定性'],['access','通路狀況'],['hypotension','透析低血壓'],['overload','體液負擔'],...socialFields]){if(!val(id))missing.push(l);else if(val(id)==='no'&&id!=='hypotension'&&id!=='overload')barriers.push(l);}
+if(val('stable')==='no')urgent.push('臨床不穩定：先於院內評估與處置。');if(val('access')==='unsafe')barriers.push('通路感染／功能不穩：先治療、確認通路安全。');
+if(num('potassium')!==null&&num('potassium')>=6)urgent.push('血鉀 ≥6 mmol/L：優先評估心電圖、急性治療與是否須緊急透析，不宜直接開始居家處方。');if(num('sbp')!==null&&num('sbp')<90)urgent.push('收縮壓 <90 mmHg：先確認症狀與循環穩定性。');if(val('access')==='catheter')notes.push('導管不是自動排除條件；需確認無菌連接、感染監測及院方居家導管流程。');
+if(!val('dayAvailable'))missing.push('日間可用時段');if(!val('nightAvailable'))missing.push('夜間可用時段');if(val('nightAvailable')==='yes'&&!val('nightSafety'))missing.push('夜間安全計畫');if(val('dayAvailable')==='no'&&val('nightAvailable')==='no')barriers.push('沒有可執行的治療時段。');
+let status=val('willing')==='no'?'目前不選擇居家透析':urgent.length?'目前不宜直接開始居家治療':barriers.length?'改善後再評估':missing.length?'資料不足，待完成居家評估':'可進入訓練與居家訪視評估';let tone=urgent.length?'bad':barriers.length||missing.length?'warn':'good';
+$('eligibility').innerHTML=`<div class="banner ${tone}"><strong>${status}</strong><div class="status-line">${tone==='good'?'仍須完成正式訓練、實際操作驗證與團隊核准。':'目前尚不能認定已適合獨立居家治療。'}</div></div>`+(urgent.length?list(urgent):'')+(barriers.length?'<h3>需改善的條件</h3>'+list(barriers):'')+(missing.length?'<details open><summary>待補齊 '+missing.length+' 項</summary>'+list(missing)+'</details>':'')+list(notes);
+const ranges=[['age','年齡',18,110],['height','身高',100,230],['weight','乾體重',25,250],['weeklyUF','每週淨 UF',0,60],['peakUF','最大單次 UF',0,15],['potassium','血鉀',1,10],['phosphate','血磷',.1,20],['sbp','收縮壓',40,250],['maxDays','每週次數',3,7],['maxDayHours','日間時數',2,8],['maxNightHours','夜間時數',6,8],['ufrGoal','UFR 上限',3,13],['measuredV','V',10,100],['kru','Kru',0,20]];
+for(const [id,l,min,max] of ranges){const x=num(id);if(x!==null&&(!Number.isFinite(x)||x<min||x>max))invalid.push(l+'超出有效範圍 '+min+'–'+max+'，請確認。');}if(num('maxDays')!==null&&!Number.isInteger(num('maxDays')))invalid.push('每週次數必須是整數。');
+const needed=[];for(const [id,l] of [['age','年齡（確認成人）'],['weight','乾體重'],['weeklyUF','每週淨 UF'],['maxDays','每週最多次數'],['ufrGoal','UFR 規劃上限']])if(num(id)===null)needed.push(l);if(num('measuredV')===null){for(const [id,l] of [['height','身高']])if(num(id)===null)needed.push(l);if(!val('sex'))needed.push('生理性別或量測 V');}if(val('rkf')==='measured'&&num('kru')===null)needed.push('量測 Kru');
+for(const m of modes){let k=num('k_'+m.id);if(k!==null&&(!(k>=20&&k<=400)))invalid.push(m.name+'有效 K 須介於 20–400 mL/min。');}
+let advice=[...urgent,...barriers.map(x=>x==='病人知情意願'?'尊重病人目前不選擇居家透析的決定；提供院內透析及其他適當治療選項。':x+'：安排團隊／社工／居家訪視介入，完成後重新評估。')];if(missing.length)advice.push('先完成待補項目；試算結果不等於居家治療核准。');if(!val('rkf'))advice.push('未量測 Kru：本次僅計透析部分，作不計殘腎的保守估算；請收集定時尿液量測殘腎清除率。');
+if(num('potassium')===null)advice.push('補血鉀與其他近期檢驗，確認居家治療安全。');else if(num('potassium')>5.5&&num('potassium')<6)advice.push('血鉀偏高：檢查長間隔、飲食、藥物與通路清除；透析液鉀濃度由醫師設定。');if(num('phosphate')!==null&&num('phosphate')>5.5)advice.push('血磷偏高：比較長時模式，同時檢查磷結合劑、飲食與營養；尿素足量不能保證血磷達標。');
+summaryText=`【居家血液透析評估 v2.0】\n適合度：${status}\n待補項目：${missing.join('、')||'無'}\n障礙：${barriers.join('、')||'無'}\n`;
+if(invalid.length||needed.length){$('recommendation').innerHTML='<div class="empty">'+(invalid.length?list(invalid):'')+(needed.length?'<strong>處方試算需補齊：</strong>'+list(needed):'')+'</div>';$('comparison').innerHTML='';$('improvements').innerHTML=list(advice);summaryText+='處方資料不足或無效。\n'+[...invalid,...needed].join('\n');return;}
+const V=num('measuredV')??watson(val('sex'),num('age'),num('height'),num('weight')),W=num('weight'),UF=num('weeklyUF'),kru=val('rkf')==='measured'?num('kru'):0;
+if(!(V>=10&&V<=100)){$('recommendation').innerHTML='<div class="banner bad">V 估算不合理，請提供量測／建模 V。</div>';$('comparison').innerHTML='';$('improvements').innerHTML=list(advice);return;}
+const candidates=[],excluded=[];for(const m of modes){const night=m.id==='night',timeLimit=num(night?'maxNightHours':'maxDayHours');const reasons=[];if(val(night?'nightAvailable':'dayAvailable')!=='yes')reasons.push('可用時段尚未確認／不可用');if(night&&val('nightSafety')!=='yes')reasons.push('夜間安全計畫未完成');if(timeLimit===null)reasons.push('未填單次可用時數');else if(timeLimit<m.minT)reasons.push('可用時數不足此模式');if(num('maxDays')<m.minN)reasons.push('每週可用次數不足');const K=num('k_'+m.id);if(K===null)reasons.push('缺有效尿素清除率 K');if(reasons.length){excluded.push(m.name+'：'+reasons.join('；'));continue;}
+const maxT=Math.min(timeLimit,m.maxT),maxN=Math.min(num('maxDays'),m.maxN),baseT=Math.min(m.t,maxT),baseN=Math.min(m.n,maxN),base=make(m,K,baseT,baseN,V,UF,kru,W);
+let opts=[];for(let n=m.minN;n<=maxN;n++)for(let t=m.minT;t<=maxT+.001;t+=.5){const c=make(m,K,t,n,V,UF,kru,W);if(c)opts.push(c);}if(!base||!opts.length){excluded.push(m.name+'：UF 校正參數無效，請確認體液量與 V。');continue;}
+const safe=c=>c.adequacy.target&&c.peakUfr<=num('ufrGoal');let selected=safe(base)?base:opts.filter(safe).sort((a,b)=>(Math.max(0,a.n-baseN)*3+Math.max(0,a.t-baseT))-(Math.max(0,b.n-baseN)*3+Math.max(0,b.t-baseT))||a.n*a.t-b.n*b.t)[0];if(!selected)selected=opts.sort((a,b)=>(b.adequacy.target-a.adequacy.target)||(b.adequacy.min-a.adequacy.min)||a.peakUfr-b.peakUfr||b.k.total-a.k.total)[0];selected.base=base;selected.changed=selected.n!==baseN||selected.t!==baseT;selected.safe=safe(selected);selected.low=kinetics(K*.8,selected.t,selected.n,V,UF,kru);selected.high=kinetics(K*1.2,selected.t,selected.n,V,UF,kru);selected.score=(selected.safe?1000:0)+(selected.adequacy.target?400:0)+(selected.adequacy.min?100:0)+(val('preference')===m.id?80:0)+((val('hypotension')==='yes'||val('overload')==='yes'||num('phosphate')>5.5)&&['long','night'].includes(m.id)?35:0)-selected.n*selected.t*.3-selected.n;candidates.push(selected);}
+candidates.sort((a,b)=>b.score-a.score);
+if(!candidates.length){$('recommendation').innerHTML='<div class="empty">尚無可比較處方；請補有效 K、可用時段與治療上限。</div>';$('comparison').innerHTML=list(excluded);$('improvements').innerHTML=list(advice);summaryText+='無可比較處方。\n'+excluded.join('\n');return;}
+const best=candidates[0];const ready=tone==='good';const heading=urgent.length?'暫停居家啟動；以下僅作規劃比較':ready?'優先討論：'+best.name:'條件改善／資料確認後可討論：'+best.name;
+const why=[];if(best.safe)why.push('在您設定的時段內，估算足量及尖峰 UFR 符合規劃目標');else why.push('現有條件仍未同時滿足足量與 UFR 目標，需擴大可用時間或調整模式');if(val('preference')===best.id)why.push('符合病人偏好');if(['long','night'].includes(best.id)&&(val('hypotension')==='yes'||val('overload')==='yes'))why.push('長時療程可降低單位時間脫水負擔');
+$('recommendation').innerHTML=`<div class="banner ${urgent.length?'bad':best.safe?'good':'warn'}"><strong>${heading}</strong><div>${best.n} 次／週 × ${best.t.toFixed(1)} 小時；K 假設 ${best.K} mL/min</div><div class="note">${why.join('；')}。</div></div><div class="metrics"><div class="metric"><span>${val('rkf')?'預估總 StdKt/V':'不計殘腎 StdKt/V'}</span><strong>${best.k.total.toFixed(2)}</strong><span>${best.adequacy.text}</span></div><div class="metric"><span>尖峰 UFR 近似值</span><strong>${best.peakUfr.toFixed(1)}</strong><span>mL/kg/h；平均 ${best.avgUfr.toFixed(1)}</span></div><div class="metric"><span>每週治療時間</span><strong>${(best.n*best.t).toFixed(1)}</strong><span>小時（另加準備與收機）</span></div></div><p class="note">V=${V.toFixed(1)} L（${num('measuredV')!==null?'量測／建模':'Watson 體位估算'}）；透析貢獻 ${best.k.dialysis.toFixed(2)}＋殘腎貢獻 ${best.k.renal.toFixed(2)}。${!val('rkf')?'殘腎未知，未計入；不能判定完整總量。':''} K±20% 時 StdKt/V 約 ${best.low.total.toFixed(2)}–${best.high.total.toFixed(2)}。</p><p class="note">${best.adequacy.basis}。最長間隔假設 ${gap(best.n)}h；尖峰單次 UF ${best.peakUF.toFixed(2)} L。${num('peakUF')!==null?'採手動最大單次 UF，增加頻率後請重新評估。':'依均勻體液累積近似，需核對實際排程。'}</p>`;
+$('comparison').innerHTML='<div class="table-wrap"><table><thead><tr><th>模式</th><th>基準 → 調整處方</th><th>StdKt/V</th><th>尖峰 UFR</th><th>足量／可行性</th></tr></thead><tbody>'+candidates.map((c,i)=>`<tr class="${i===0?'selected':''}"><td>${c.name}</td><td>${c.base.n}×${c.base.t}h → ${c.n}×${c.t}h<br><small>${c.changed?'已提出調整':'維持基準'}</small></td><td>${c.base.k.total.toFixed(2)} → ${c.k.total.toFixed(2)}<br><small>spKt/V ${c.k.sp.toFixed(2)}</small></td><td>${c.peakUfr.toFixed(1)}<br><small>mL/kg/h</small></td><td class="${c.safe?'good':'warn'}">${c.adequacy.text}<br><small>${c.peakUfr>num('ufrGoal')?'UFR 超過個別上限':'UFR 符合規劃上限'}</small></td></tr>`).join('')+'</tbody></table></div>'+(excluded.length?'<details open><summary>未納入比較的模式</summary>'+list(excluded)+'</details>':'');
+if(best.changed)advice.push(`最佳候選由 ${best.base.n}次×${best.base.t}h 調整為 ${best.n}次×${best.t}h：StdKt/V ${best.base.k.total.toFixed(2)} → ${best.k.total.toFixed(2)}；尖峰 UFR ${best.base.peakUfr.toFixed(1)} → ${best.peakUfr.toFixed(1)} mL/kg/h。`);
+if(!best.adequacy.target)advice.push('目前足量未達規劃目標：增加可用時數／次數、考慮其他長時模式；確認實際有效 K、再循環與通路功能。不可僅依這次估算建議重建通路。');
+if(best.peakUfr>num('ufrGoal')){const h=best.peakUF*1000/(W*num('ufrGoal'));advice.push(`尖峰 UFR 偏高：在同一尖峰 UF 下至少需 ${h.toFixed(1)} 小時才能達個別上限；或增加頻率並重算單次 UF，重新評估乾體重、限鈉／體液管理。`);}if(best.peakUfr>13)advice.push('尖峰 UFR >13 mL/kg/h：高風險提示，應優先調整體液與療程，勿直接採用。');
+if(!adequacy(best.low,best.n,val('rkf')).target)advice.push('有效 K 降低 20% 的敏感度情境未達目標：建議保留處方餘裕，並於開始／調整後以正確採血的透析前後 BUN 與尿素動力學確認。');
+advice.push('開始／調整後追蹤 delivered spKt/V／StdKt/V、尿量及 Kru、血壓、鉀磷、體液、症狀與照顧負擔；以實測結果再次調整。');if(best.id==='night')advice.push('夜間療程：確認漏血偵測、針頭／管路固定、警報反應、抗凝與救援安排；Qb／Qd、透析液電解質與抗凝由團隊依機型與病人設定。');
+$('improvements').innerHTML=list(advice);summaryText+=`乾體重 ${W}kg；V ${V.toFixed(1)}L；每週 UF ${UF}L\n${heading}\n處方 ${best.n}次/週 × ${best.t}h；有效 K ${best.K}mL/min\n預估 ${val('rkf')?'總':'不計殘腎'} StdKt/V ${best.k.total.toFixed(2)}（透析 ${best.k.dialysis.toFixed(2)}＋殘腎 ${best.k.renal.toFixed(2)}）；spKt/V ${best.k.sp.toFixed(2)}\n${best.adequacy.text}；${best.adequacy.basis}\n尖峰 UFR ${best.peakUfr.toFixed(1)}mL/kg/h；最長間隔假設 ${gap(best.n)}h\n改善方案：\n${advice.join('\n')}\n此為規劃估算，須完成訓練核准及實測足量確認。`;
+}
+function make(m,K,t,n,V,UF,kru,W){const k=kinetics(K,t,n,V,UF,kru);if(!k)return null;const peakUF=num('peakUF')??UF*gap(n)/168;return {...m,K,t,n,k,adequacy:adequacy(k,n,val('rkf')),peakUF,avgUfr:UF/n*1000/(W*t),peakUfr:peakUF*1000/(W*t)};}
+function list(xs){return xs.length?'<ul>'+xs.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>':'';}
+$('form').addEventListener('input',render);$('form').addEventListener('change',render);$('form').addEventListener('submit',e=>e.preventDefault());
+$('demo').onclick=()=>{ $('form').reset();for(const [id,v] of Object.entries({sex:'male',age:55,height:170,weight:65,weeklyUF:10.5,potassium:4.8,phosphate:5.8,sbp:130,stable:'yes',hypotension:'no',overload:'no',access:'avf',dayAvailable:'yes',nightAvailable:'yes',nightSafety:'yes',maxDays:6,maxDayHours:4,maxNightHours:8,ufrGoal:10,rkf:'none',k_standard:230,k_short:230,k_long:180,k_night:155}))$(id).value=v;for(const [id]of socialFields)$(id).value='yes';render();showToast('已載入虛構示範資料；請替換為病人資料。');};
+$('reset').onclick=()=>{$('form').reset();render();};$('print').onclick=()=>window.print();$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(summaryText);showToast('評估摘要已複製');}catch(e){showToast('無法存取剪貼簿，請使用列印／另存 PDF。');}};
+function showToast(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500);}
+$('calcKru').onclick=()=>{const u=num('urineVolume'),h=num('urineHours'),un=num('urineBUN'),bn=num('meanBUN');if(![u,h,un,bn].every(x=>x!==null&&Number.isFinite(x))||u<0||h<=0||h>168||un<0||bn<=0){$('urineResult').textContent='請輸入完整有效的收集資料。';return;}const k=un/bn*u/(h*60);if(k>20){$('urineResult').textContent='Kru >20 mL/min，請核對單位及收集資料。';return;}$('kru').value=k.toFixed(3);$('rkf').value='measured';$('urineResult').textContent='Kru = '+k.toFixed(3)+' mL/min（待醫師確認）';render();};render();
+</script></body></html>

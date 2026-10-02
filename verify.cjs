@@ -1,0 +1,27 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+const elements={};
+function el(id){return elements[id]??=( {_value:'',get value(){return this._value;},set value(v){this._value=String(v);},style:{},textContent:'',innerHTML:'',append(d){for(const m of d.innerHTML.matchAll(/(?:input|select) id="([^"]+)"/g))el(m[1]);},addEventListener(){},reset(){for(const e of Object.values(elements))e.value='';el('preference').value='any';}} );}
+const context={document:{getElementById:el,createElement:()=>({innerHTML:''})},console,Math,Number,Array,Object,String,setTimeout(){},navigator:{},window:{}};
+vm.createContext(context);const html=fs.readFileSync(__dirname+'/index.html','utf8');vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
+const run=s=>vm.runInContext(s,context),set=(id,v)=>el(id).value=String(v);
+assert.match(el('eligibility').innerHTML,/資料不足/);assert.match(el('recommendation').innerHTML,/需補齊/);
+const known=run('kinetics(200,4,3,40,0,0)'); const e=1.2*240/270; const expected=(10080*(1-Math.exp(-e))/240)/((1-Math.exp(-e))/e+10080/720-1);assert.ok(Math.abs(known.total-expected)<1e-12);
+assert.ok(Math.abs(run("watson('male',55,170,65)")-37.5222)<.0001);
+assert.ok(Math.abs(run('kinetics(200,4,3,40,0,2).renal')-.504)<1e-12);
+assert.ok(run('kinetics(200,4,3,40,10,0).total')>known.total);
+assert.equal(run('kinetics(200,4,3,40,200,0)'),null);
+el('demo').onclick();assert.match(el('eligibility').innerHTML,/可進入訓練/);assert.match(el('comparison').innerHTML,/短每日/);assert.match(el('comparison').innerHTML,/夜間長時/);assert.doesNotMatch(el('comparison').innerHTML,/NaN|Infinity/);
+assert.ok(run('summaryText').includes('此為規劃估算'));
+set('nightSafety','no');run('render()');assert.match(el('comparison').innerHTML,/夜間安全計畫未完成/);assert.ok(!run('summaryText').includes('優先討論：夜間長時'));
+set('potassium',6.2);run('render()');assert.match(el('eligibility').innerHTML,/目前不宜/);assert.match(el('recommendation').innerHTML,/暫停居家啟動/);
+el('demo').onclick();set('space','no');run('render()');assert.match(el('eligibility').innerHTML,/改善後再評估/);
+el('demo').onclick();set('support','solo');run('render()');assert.match(el('eligibility').innerHTML,/可進入訓練/);
+set('rkf','');run('render()');assert.match(el('recommendation').innerHTML,/殘腎未知，未計入/);
+set('rkf','measured');set('kru','');run('render()');assert.match(el('recommendation').innerHTML,/量測 Kru/);
+set('weight',-2);run('render()');assert.match(el('recommendation').innerHTML,/乾體重超出有效範圍/);
+el('demo').onclick();set('maxDays',3.5);run('render()');assert.match(el('recommendation').innerHTML,/必須是整數/);
+el('demo').onclick();for(const m of ['standard','short','long','night'])set('k_'+m,'');run('render()');assert.match(el('recommendation').innerHTML,/尚無可比較處方/);
+el('demo').onclick();set('urineVolume',600);set('urineHours',24);set('urineBUN',400);set('meanBUN',50);el('calcKru').onclick();assert.equal(el('kru').value,'3.333');
+el('demo').onclick();set('willing','no');run('render()');assert.match(el('eligibility').innerHTML,/目前不選擇居家透析/);
+el('demo').onclick();set('weeklyUF',35);run('render()');assert.match(el('improvements').innerHTML,/尖峰 UFR 偏高/);
+console.log('PASS: numerical reference, renal/UF correction, missing data, four-mode comparison, safety gates, solo support, input validation, timed urine and high-UF improvement.');
