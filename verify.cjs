@@ -5,7 +5,7 @@ const context={document:{getElementById:el,createElement:()=>({innerHTML:''})},c
 vm.createContext(context);const html=fs.readFileSync(__dirname+'/index.html','utf8');vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
 const run=s=>vm.runInContext(s,context),set=(id,v)=>el(id).value=String(v);
 assert.match(el('eligibility').innerHTML,/資料不足/);assert.match(el('recommendation').innerHTML,/需補齊/);
-const known=run('kinetics(200,4,3,40,0,0)'); const e=1.2*240/270; const expected=(10080*(1-Math.exp(-e))/240)/((1-Math.exp(-e))/e+10080/720-1);assert.ok(Math.abs(known.total-expected)<1e-12);
+const known=run('kinetics(200,4,3,40,0,0)'); const e=1.2*240/270.7; const expected=(10080*(1-Math.exp(-e))/240)/((1-Math.exp(-e))/e+10080/720-1);assert.ok(Math.abs(known.total-expected)<1e-12);
 assert.ok(Math.abs(run("watson('male',55,170,65)")-37.5222)<.0001);
 assert.ok(Math.abs(run('kinetics(200,4,3,40,0,2).renal')-.504)<1e-12);
 assert.ok(run('kinetics(200,4,3,40,10,0).total')>known.total);
@@ -37,3 +37,16 @@ set('discount',110);run('render()');assert.match(el('recommendation').innerHTML,
 el('demo').onclick();set('stage','treated');run('render()');assert.equal(el('planningBox').style.display,'none');assert.equal(el('measuredBox').style.display,'block');assert.match(el('recommendation').innerHTML,/輸入平均 K/);
 el('reset').onclick();assert.equal(el('stage').value,'pre');assert.match(el('eligibility').innerHTML,/資料不足/);
 console.log('PASS: pre-dialysis planning without measured clearance, theoretical model limits, equipment specification validation, post-treatment mode and reset.');
+
+// Access/sampling regression: published FHN example and explicit eKt/V preservation.
+const av=run('kinetics(175,4,4,30,0,0,30.7)'),cat=run('kinetics(175,4,4,30,0,0,18.5)');
+assert.ok(Math.abs(av.sp-1.4)<1e-12);assert.ok(Math.abs(av.e-1.4*240/270.7)<1e-12);assert.ok(Math.abs(cat.e-1.4*240/258.5)<1e-12);assert.ok(cat.total>av.total);
+el('demo').onclick();assert.equal(run('reboundModel().Tp'),30.7);set('access','avg');assert.equal(run('reboundModel().Tp'),30.7);set('access','catheter');run('render()');assert.equal(run('reboundModel().Tp'),18.5);assert.match(el('recommendation').innerHTML,/Tp=18.5/);
+set('access','planned');set('plannedAccess','');run('render()');assert.match(el('eligibility').innerHTML,/改善後再評估/);assert.match(el('recommendation').innerHTML,/AV 情境 StdKt\/V.*導管情境/);assert.match(el('comparison').innerHTML,/導管情境/);assert.doesNotMatch(el('recommendation').innerHTML,/NaN|Infinity/);
+set('plannedAccess','catheter');run('render()');assert.equal(run('reboundModel().Tp'),18.5);assert.match(el('eligibility').innerHTML,/通路尚未建立/);
+set('stage','treated');set('doseType','e');set('doseValue',1.3);run('render()');assert.match(el('doseResult').textContent,/eKt\/V=1.300.*不再/);
+set('doseType','sp');set('doseValue',1.4);set('doseMinutes',240);run('render()');assert.match(el('doseResult').textContent,/尚未核對：不轉換/);
+set('sampleMatch','yes');run('render()');assert.match(el('doseResult').textContent,/實際通路/);set('access','avf');run('render()');assert.match(el('doseResult').textContent,/eKt\/V≈1.241/);set('access','catheter');run('render()');assert.match(el('doseResult').textContent,/eKt\/V≈1.300/);
+set('doseMinutes','');run('render()');assert.match(el('doseResult').textContent,/實際透析分鐘/);set('doseValue',-1);run('render()');assert.match(el('doseResult').textContent,/有效单次|有效單次/);
+el('reset').onclick();assert.equal(el('stage').value,'pre');assert.match(el('eligibility').innerHTML,/資料不足/);
+console.log('PASS: AV/catheter numerical references, unknown-access comparison, planned-access safety, sampling gate, actual-time validation and no repeated eKt/V correction.');
