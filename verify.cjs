@@ -6,7 +6,7 @@ vm.createContext(context);const html=fs.readFileSync(__dirname+'/index.html','ut
 const run=s=>vm.runInContext(s,context),set=(id,v)=>el(id).value=String(v);
 assert.match(el('eligibility').innerHTML,/資料不足/);assert.match(el('recommendation').innerHTML,/需補齊/);
 const known=run('kinetics(200,4,3,40,0,0)'); const e=1.2*240/270.7; const expected=(10080*(1-Math.exp(-e))/240)/((1-Math.exp(-e))/e+10080/720-1);assert.ok(Math.abs(known.total-expected)<1e-12);
-assert.ok(Math.abs(run("watson('male',55,170,65)")-37.5222)<.0001);
+assert.ok(Math.abs(run("watson('male',55,170,65)")-37.3242)<.0001);
 assert.ok(Math.abs(run('kinetics(200,4,3,40,0,2).renal')-.504)<1e-12);
 assert.ok(run('kinetics(200,4,3,40,10,0).total')>known.total);
 assert.equal(run('kinetics(200,4,3,40,200,0)'),null);
