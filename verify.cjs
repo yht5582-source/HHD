@@ -59,7 +59,7 @@ for(const [i,c] of CASES.entries()){
   run(`loadCase(${i})`);const x=c.expect,best=run('(()=>summaryText)()'),rec=el('recommendation').innerHTML,text=[...c.result,...c.points].join(' ');
   assert.match(el('eligibility').innerHTML,new RegExp(x.status),'case '+(i+1));
   assert.ok(rec.includes(`${x.n} 次／週 × ${x.t.toFixed(1)} 小時`),`case ${i+1} prescription: ${best}`);
-  assert.ok(el('comparison').innerHTML.includes(x.best),'case '+(i+1));
+  assert.ok(el('comparison').innerHTML.includes(x.best),'case '+(i+1));assert.match(el('eligibility').innerHTML,new RegExp(x.nhi),'case '+(i+1)+' NHI');
   assert.ok(rec.includes(`<strong>${x.std}</strong>`),`case ${i+1} StdKt/V`);assert.ok(rec.includes(`<strong>${x.ufr}</strong>`),`case ${i+1} UFR`);
   assert.ok(el('comparison').innerHTML.includes('spKt/V '+x.sp),`case ${i+1} spKt/V`);
   for(const k of ['std','ufr'])assert.ok(text.includes(x[k]),`case ${i+1} text lacks ${k}`);
@@ -79,3 +79,15 @@ run('quizRetryWrong()');assert.deepEqual({...run('quizScore()')},{total:20,done:
 for(let i=0;i<20;i++)run(`quizAnswer(${i},0)`);assert.match(el('quizScore').innerHTML,/完成：20／20/);run('quizStart()');assert.equal(run('quizScore()').done,0);
 el('reset').onclick();assert.equal(el('caseBanner').hidden,true);
 console.log('PASS: six teaching cases match the engine, written arithmetic, quiz scoring, locking and retry.');
+
+// NHI pilot enrolment is judged apart from clinical suitability.
+const nhi=()=>run('nhiCheck()'),elig=()=>el('eligibility').innerHTML;
+el('demo').onclick();assert.equal(nhi().status,'review');assert.match(elig(),/可進入訓練/);assert.match(elig(),/尚須保險人事前審查同意/);
+set('nhiReview','approved');assert.equal(nhi().status,'approved');set('nhiReview','denied');assert.equal(nhi().status,'exclude');set('nhiReview','');
+for(const [id,bad,why] of [['nhiCohabit','no','無同居'],['nhiPsych','yes','精神'],['nhiResidence','no','固定居所'],['nhiHygiene','yes','個人衛生']]){el('demo').onclick();set(id,bad);run('render()');assert.equal(nhi().status,'exclude');assert.match(elig(),new RegExp(why));assert.match(elig(),/可進入訓練/);assert.match(el('improvements').innerHTML,/不符合收案/);assert.ok(run('summaryText').includes('不符合收案'));}
+el('demo').onclick();set('nhiCohabit','no');set('support','solo');run('render()');assert.match(elig(),/可進入訓練/);assert.match(elig(),/不符合收案/);
+set('nhiSetting','facility');assert.equal(nhi().status,'pending');assert.match(nhi().pending[0],/分區業務組/);
+el('demo').onclick();set('adherence','no');assert.equal(nhi().status,'exclude');
+el('demo').onclick();set('nhiResidence','');assert.equal(nhi().status,'pending');
+el('reset').onclick();assert.equal(nhi().status,'pending');assert.match(elig(),/收案條件待確認/);
+console.log('PASS: NHI enrolment exclusions, pending items, facility query, prior review and separation from clinical suitability.');
