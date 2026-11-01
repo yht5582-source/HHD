@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const elements={};
-function el(id){return elements[id]??=( {_value:'',get value(){return this._value;},set value(v){this._value=String(v);},style:{},textContent:'',innerHTML:'',append(d){for(const m of d.innerHTML.matchAll(/(?:input|select) id="([^"]+)"/g))el(m[1]);},addEventListener(){},reset(){for(const e of Object.values(elements))e.value='';el('preference').value='any';}} );}
+function el(id){return elements[id]??=( {_value:'',get value(){return this._value;},set value(v){this._value=String(v);},style:{},textContent:'',innerHTML:'',append(d){for(const m of d.innerHTML.matchAll(/(?:input|select) id="([^"]+)"/g))el(m[1]);},addEventListener(){},setAttribute(){},reset(){for(const e of Object.values(elements))e.value='';el('preference').value='any';}} );}
 const context={document:{getElementById:el,createElement:()=>({innerHTML:''})},console,Math,Number,Array,Object,String,setTimeout(){},navigator:{},window:{}};
 vm.createContext(context);const html=fs.readFileSync(__dirname+'/index.html','utf8');vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
 const run=s=>vm.runInContext(s,context),set=(id,v)=>el(id).value=String(v);
@@ -50,3 +50,32 @@ set('sampleMatch','yes');run('render()');assert.match(el('doseResult').textConte
 set('doseMinutes','');run('render()');assert.match(el('doseResult').textContent,/實際透析分鐘/);set('doseValue',-1);run('render()');assert.match(el('doseResult').textContent,/有效单次|有效單次/);
 el('reset').onclick();assert.equal(el('stage').value,'pre');assert.match(el('eligibility').innerHTML,/資料不足/);
 console.log('PASS: AV/catheter numerical references, unknown-access comparison, planned-access safety, sampling gate, actual-time validation and no repeated eKt/V correction.');
+
+// Teaching content: every number written in a case must match the live engine.
+const CASES=run('CASES'),QUIZ=run('QUIZ');
+assert.equal(CASES.length,6);assert.equal(QUIZ.length,20);
+assert.deepEqual(['基礎','進階','高階'].map(l=>QUIZ.filter(q=>q.level===l).length),[7,7,6]);
+for(const [i,c] of CASES.entries()){
+  run(`loadCase(${i})`);const x=c.expect,best=run('(()=>summaryText)()'),rec=el('recommendation').innerHTML,text=[...c.result,...c.points].join(' ');
+  assert.match(el('eligibility').innerHTML,new RegExp(x.status),'case '+(i+1));
+  assert.ok(rec.includes(`${x.n} 次／週 × ${x.t.toFixed(1)} 小時`),`case ${i+1} prescription: ${best}`);
+  assert.ok(el('comparison').innerHTML.includes(x.best),'case '+(i+1));
+  assert.ok(rec.includes(`<strong>${x.std}</strong>`),`case ${i+1} StdKt/V`);assert.ok(rec.includes(`<strong>${x.ufr}</strong>`),`case ${i+1} UFR`);
+  assert.ok(el('comparison').innerHTML.includes('spKt/V '+x.sp),`case ${i+1} spKt/V`);
+  for(const k of ['std','ufr'])assert.ok(text.includes(x[k]),`case ${i+1} text lacks ${k}`);
+  if(x.dose)assert.ok(el('doseResult').textContent.includes(x.dose)&&text.includes(x.dose),`case ${i+1} dose`);
+  assert.doesNotMatch(el('caseDetail').innerHTML+rec,/NaN|Infinity|undefined/);
+}
+const pk=(uf,n,w,t)=>uf*run(`gap(${n})`)/168*1000/(w*t),close=(a,b,d=.05)=>assert.ok(Math.abs(a-b)<d,`${a} vs ${b}`);
+close(pk(7.5,3,70,4),11.5);close(pk(16,3,78,4),22.0);close(pk(16,5,78,2.5),23.4);close(pk(16,3,78,6),14.7);close(pk(16,6,78,4),14.7);close(pk(6,5,55,2.5),12.5);close(pk(7,3,52,4),14.4);
+close(pk(10.5,3,65,4),17.3);close(10.5/3*1000/(65*4),13.5);
+close(240*240/(run("watson('male',52,172,70)")*1000),1.46,.005);close(run("watson('male',46,185,118)"),57.6);close(300*240/57600,1.25,.005);close(400/80*900/1440,3.125,.001);
+close(run('kinetics(230,4,3,40,0,0,30.7).total'),2.18,.005);close(run('kinetics(230,2.5,5,40,0,0,30.7).total'),2.61,.005);close(run('kinetics(230,2.5,5,40,0,0,30.7).sp'),.86,.005);close(run('kinetics(230,4,3,40,0,0,30.7).sp'),1.38,.005);close(run('kinetics(200,4,3,40,0,2).renal'),.504,.001);close(run('modeledClearance(400,150,800)'),147,.5);
+// Quiz flow: correct option is o[0] whatever the shuffle; answers lock; retry clears only wrong ones.
+for(const q of QUIZ){assert.equal(new Set(q.o).size,4);assert.ok(q.why&&q.ref&&run('SRC')[q.src]);if(q.case!==undefined)assert.ok(CASES[q.case]);}
+run('quizStart()');run('quizAnswer(0,0)');run('quizAnswer(0,1)');run('quizAnswer(1,2)');
+assert.deepEqual({...run('quizScore()')},{total:20,done:2,right:1});assert.match(el('quizList').innerHTML,/答對了/);assert.match(el('quizList').innerHTML,/答錯了/);
+run('quizRetryWrong()');assert.deepEqual({...run('quizScore()')},{total:20,done:1,right:1});
+for(let i=0;i<20;i++)run(`quizAnswer(${i},0)`);assert.match(el('quizScore').innerHTML,/完成：20／20/);run('quizStart()');assert.equal(run('quizScore()').done,0);
+el('reset').onclick();assert.equal(el('caseBanner').hidden,true);
+console.log('PASS: six teaching cases match the engine, written arithmetic, quiz scoring, locking and retry.');
