@@ -91,3 +91,10 @@ el('demo').onclick();set('adherence','no');assert.equal(nhi().status,'exclude');
 el('demo').onclick();set('nhiResidence','');assert.equal(nhi().status,'pending');
 el('reset').onclick();assert.equal(nhi().status,'pending');assert.match(elig(),/收案條件待確認/);
 console.log('PASS: NHI enrolment exclusions, pending items, facility query, prior review and separation from clinical suitability.');
+
+// Mind maps: structure, valid links, and mode figures taken from the engine.
+const MAPS=run('MAPS');assert.deepEqual(Object.keys(MAPS),['dx','tx']);
+for(const m of Object.values(MAPS)){assert.ok(m.branches.length>=8);for(const b of m.branches){assert.ok(b.k.length>=3&&/^#[0-9a-f]{6}$/.test(b.color));for(const n of b.k){if(n.s)assert.ok(run('SRC')[n.s]);if(n.c!==undefined)assert.ok(CASES[n.c],n.t);}}}
+assert.ok(MAPS.tx.branches[0].k.some(n=>n.t.startsWith('短每日：基準 5×2.5')));
+run('renderMap()');assert.match(el('mapBody').innerHTML,/先排除急症/);run("mapKey='tx';renderMap()");assert.match(el('mapBody').innerHTML,/足量目標/);assert.doesNotMatch(el('mapBody').innerHTML,/undefined|NaN/);
+console.log('PASS: mind map structure, sources and case links.');
